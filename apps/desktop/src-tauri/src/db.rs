@@ -8,9 +8,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
-use crate::models::{
-    Client, CompanyProfile, DashboardStats, DocumentRecord, Note, Project,
-};
+use crate::models::{Client, CompanyProfile, DashboardStats, DocumentRecord, Note, Project};
 
 pub struct AppState {
     pub conn: Mutex<Connection>,
