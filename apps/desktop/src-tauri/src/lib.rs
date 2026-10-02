@@ -1,10 +1,14 @@
 mod db;
+mod extras;
 mod models;
 
 use tauri::{Manager, State};
 
 use db::AppState;
-use models::{Client, CompanyProfile, DashboardStats, DocumentRecord, Note, Project, SearchHit};
+use models::{
+    ActivityRecord, AppInfo, Client, CompanyProfile, DashboardStats, DocumentRecord, FinanceRecord,
+    Note, Project, SearchHit, TaskRecord,
+};
 
 #[tauri::command]
 fn dashboard_stats(state: State<'_, AppState>) -> Result<DashboardStats, String> {
@@ -32,6 +36,11 @@ fn create_client(state: State<'_, AppState>, client: Client) -> Result<i64, Stri
 }
 
 #[tauri::command]
+fn update_client(state: State<'_, AppState>, client: Client) -> Result<(), String> {
+    extras::update_client(&state, client)
+}
+
+#[tauri::command]
 fn delete_client(state: State<'_, AppState>, id: i64) -> Result<(), String> {
     db::delete_client(&state, id)
 }
@@ -47,6 +56,11 @@ fn create_project(state: State<'_, AppState>, project: Project) -> Result<i64, S
 }
 
 #[tauri::command]
+fn update_project(state: State<'_, AppState>, project: Project) -> Result<(), String> {
+    extras::update_project(&state, project)
+}
+
+#[tauri::command]
 fn delete_project(state: State<'_, AppState>, id: i64) -> Result<(), String> {
     db::delete_project(&state, id)
 }
@@ -59,6 +73,11 @@ fn list_notes(state: State<'_, AppState>) -> Result<Vec<Note>, String> {
 #[tauri::command]
 fn create_note(state: State<'_, AppState>, note: Note) -> Result<i64, String> {
     db::create_note(&state, note)
+}
+
+#[tauri::command]
+fn update_note(state: State<'_, AppState>, note: Note) -> Result<(), String> {
+    extras::update_note(&state, note)
 }
 
 #[tauri::command]
@@ -83,18 +102,100 @@ fn import_document(
 }
 
 #[tauri::command]
+fn update_document(
+    state: State<'_, AppState>,
+    id: i64,
+    title: String,
+    client_id: Option<i64>,
+    project_id: Option<i64>,
+) -> Result<(), String> {
+    extras::update_document(&state, id, title, client_id, project_id)
+}
+
+#[tauri::command]
 fn delete_document(state: State<'_, AppState>, id: i64) -> Result<(), String> {
     db::delete_document(&state, id)
 }
 
 #[tauri::command]
+fn list_tasks(state: State<'_, AppState>) -> Result<Vec<TaskRecord>, String> {
+    extras::list_tasks(&state)
+}
+
+#[tauri::command]
+fn create_task(state: State<'_, AppState>, task: TaskRecord) -> Result<i64, String> {
+    extras::create_task(&state, task)
+}
+
+#[tauri::command]
+fn update_task(state: State<'_, AppState>, task: TaskRecord) -> Result<(), String> {
+    extras::update_task(&state, task)
+}
+
+#[tauri::command]
+fn delete_task(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    extras::delete_task(&state, id)
+}
+
+#[tauri::command]
+fn list_activities(state: State<'_, AppState>) -> Result<Vec<ActivityRecord>, String> {
+    extras::list_activities(&state)
+}
+
+#[tauri::command]
+fn create_activity(state: State<'_, AppState>, activity: ActivityRecord) -> Result<i64, String> {
+    extras::create_activity(&state, activity)
+}
+
+#[tauri::command]
+fn delete_activity(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    extras::delete_activity(&state, id)
+}
+
+#[tauri::command]
+fn list_finance_records(state: State<'_, AppState>) -> Result<Vec<FinanceRecord>, String> {
+    extras::list_finance_records(&state)
+}
+
+#[tauri::command]
+fn create_finance_record(state: State<'_, AppState>, record: FinanceRecord) -> Result<i64, String> {
+    extras::create_finance_record(&state, record)
+}
+
+#[tauri::command]
+fn update_finance_record(state: State<'_, AppState>, record: FinanceRecord) -> Result<(), String> {
+    extras::update_finance_record(&state, record)
+}
+
+#[tauri::command]
+fn delete_finance_record(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    extras::delete_finance_record(&state, id)
+}
+
+#[tauri::command]
+fn app_info(state: State<'_, AppState>) -> AppInfo {
+    extras::app_info(&state)
+}
+
+#[tauri::command]
+fn export_workspace_json(state: State<'_, AppState>, destination: String) -> Result<(), String> {
+    extras::export_workspace_json(&state, destination)
+}
+
+#[tauri::command]
+fn backup_database(state: State<'_, AppState>, destination: String) -> Result<(), String> {
+    extras::backup_database(&state, destination)
+}
+
+#[tauri::command]
 fn global_search(state: State<'_, AppState>, query: String) -> Result<Vec<SearchHit>, String> {
-    db::global_search(&state, query)
+    extras::global_search(&state, query)
 }
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let state = AppState::initialize(app.handle()).map_err(std::io::Error::other)?;
             app.manage(state);
@@ -106,16 +207,34 @@ pub fn run() {
             save_company_profile,
             list_clients,
             create_client,
+            update_client,
             delete_client,
             list_projects,
             create_project,
+            update_project,
             delete_project,
             list_notes,
             create_note,
+            update_note,
             delete_note,
             list_documents,
             import_document,
+            update_document,
             delete_document,
+            list_tasks,
+            create_task,
+            update_task,
+            delete_task,
+            list_activities,
+            create_activity,
+            delete_activity,
+            list_finance_records,
+            create_finance_record,
+            update_finance_record,
+            delete_finance_record,
+            app_info,
+            export_workspace_json,
+            backup_database,
             global_search
         ])
         .run(tauri::generate_context!())

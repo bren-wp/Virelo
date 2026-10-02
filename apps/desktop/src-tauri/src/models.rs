@@ -76,7 +76,7 @@ pub struct Note {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DocumentRecord {
     pub id: i64,
     pub title: String,
@@ -87,10 +87,78 @@ pub struct DocumentRecord {
     pub created_at: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TaskRecord {
+    #[serde(default)]
+    pub id: i64,
+    pub title: String,
+    pub client_id: Option<i64>,
+    #[serde(default)]
+    pub client_name: Option<String>,
+    pub project_id: Option<i64>,
+    #[serde(default)]
+    pub project_name: Option<String>,
+    pub status: String,
+    pub priority: String,
+    pub due_date: String,
+    pub notes: String,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ActivityRecord {
+    #[serde(default)]
+    pub id: i64,
+    pub kind: String,
+    pub title: String,
+    pub details: String,
+    pub client_id: Option<i64>,
+    #[serde(default)]
+    pub client_name: Option<String>,
+    pub project_id: Option<i64>,
+    #[serde(default)]
+    pub project_name: Option<String>,
+    pub happened_at: String,
+    #[serde(default)]
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FinanceRecord {
+    #[serde(default)]
+    pub id: i64,
+    pub kind: String,
+    pub number: String,
+    pub title: String,
+    pub client_id: Option<i64>,
+    #[serde(default)]
+    pub client_name: Option<String>,
+    pub amount_cents: i64,
+    pub currency: String,
+    pub status: String,
+    pub issue_date: String,
+    pub due_date: String,
+    pub notes: String,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct SearchHit {
     pub kind: String,
     pub id: i64,
     pub title: String,
     pub subtitle: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AppInfo {
+    pub version: String,
+    pub data_dir: String,
+    pub database_path: String,
 }

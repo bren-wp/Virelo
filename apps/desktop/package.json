@@ -1,6 +1,6 @@
 {
   "name": "@virelo/desktop",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Virelo desktop application",
   "type": "module",
@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
-    "@tauri-apps/plugin-dialog": "^2.0.0"
+    "@tauri-apps/plugin-dialog": "^2.0.0",
+    "@tauri-apps/plugin-opener": "^2.0.0"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.0",

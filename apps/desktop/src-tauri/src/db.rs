@@ -14,6 +14,8 @@ use crate::models::{
 
 pub struct AppState {
     pub conn: Mutex<Connection>,
+    pub data_dir: PathBuf,
+    pub database_path: PathBuf,
     pub documents_dir: PathBuf,
 }
 
@@ -27,12 +29,15 @@ impl AppState {
         fs::create_dir_all(&documents_dir).map_err(|error| error.to_string())?;
 
         let database_path = data_dir.join("virelo.sqlite3");
-        let conn = Connection::open(database_path).map_err(|error| error.to_string())?;
+        let conn = Connection::open(&database_path).map_err(|error| error.to_string())?;
         configure_database(&conn)?;
         migrate(&conn)?;
+        crate::extras::migrate(&conn)?;
 
         Ok(Self {
             conn: Mutex::new(conn),
+            data_dir,
+            database_path,
             documents_dir,
         })
     }
