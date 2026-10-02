@@ -1,8 +1,14 @@
-use std::{fs, path::Path, sync::MutexGuard};
+use std::{
+    fs,
+    io::{Read, Write},
+    path::Path,
+    sync::MutexGuard,
+};
 
 use rusqlite::{params, Connection};
 use serde::Serialize;
 use serde_json::json;
+use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
 use crate::{
     db::{self, AppState},
@@ -1376,6 +1382,101 @@ pub fn export_workspace_html(state: &AppState, destination: String) -> Result<()
     html.push_str("</table></body></html>");
 
     fs::write(destination, html).map_err(|error| error.to_string())
+}
+
+pub fn export_workspace_archive(state: &AppState, destination: String) -> Result<(), String> {
+    let destination = Path::new(&destination);
+    if destination.as_os_str().is_empty() {
+        return Err("Odredište nije valjano.".into());
+    }
+
+    {
+        let conn = lock(state)?;
+        conn.execute_batch("PRAGMA wal_checkpoint(FULL);")
+            .map_err(|error| error.to_string())?;
+    }
+
+    let payload = json!({
+        "format": "virelo-archive",
+        "version": env!("CARGO_PKG_VERSION"),
+        "company": db::get_company_profile(state)?,
+        "clients": db::list_clients(state)?,
+        "contacts": list_client_contacts(state)?,
+        "bank_accounts": list_bank_accounts(state)?,
+        "contracts": list_contracts(state)?,
+        "projects": db::list_projects(state)?,
+        "notes": db::list_notes(state)?,
+        "documents": db::list_documents(state)?,
+        "tasks": list_tasks(state)?,
+        "activities": list_activities(state)?,
+        "finance": list_finance_records(state)?
+    });
+
+    let json_data =
+        serde_json::to_vec_pretty(&payload).map_err(|error| error.to_string())?;
+
+    let file = fs::File::create(destination).map_err(|error| error.to_string())?;
+    let mut archive = ZipWriter::new(file);
+    let options = SimpleFileOptions::default()
+        .compression_method(CompressionMethod::Deflated)
+        .unix_permissions(0o644);
+
+    archive
+        .start_file("virelo-data.json", options)
+        .map_err(|error| error.to_string())?;
+    archive
+        .write_all(&json_data)
+        .map_err(|error| error.to_string())?;
+
+    archive
+        .start_file("README.txt", options)
+        .map_err(|error| error.to_string())?;
+    archive
+        .write_all(
+            b"Virelo arhiva\n\nSadrzaj:\n- virelo-data.json: citljiv strukturirani izvoz\n- virelo.sqlite3: kompletna baza podataka\n- documents/: kopije uvezenih dokumenata\n\nArhiva je standardni ZIP i moze se otvoriti bez Virela.\n",
+        )
+        .map_err(|error| error.to_string())?;
+
+    archive
+        .start_file("virelo.sqlite3", options)
+        .map_err(|error| error.to_string())?;
+    let mut database =
+        fs::File::open(&state.database_path).map_err(|error| error.to_string())?;
+    std::io::copy(&mut database, &mut archive).map_err(|error| error.to_string())?;
+
+    if state.documents_dir.is_dir() {
+        for entry in fs::read_dir(&state.documents_dir).map_err(|error| error.to_string())? {
+            let entry = entry.map_err(|error| error.to_string())?;
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+
+            let name = entry
+                .file_name()
+                .to_str()
+                .ok_or_else(|| "Naziv dokumenta nije valjan.".to_string())?
+                .to_string();
+
+            archive
+                .start_file(format!("documents/{name}"), options)
+                .map_err(|error| error.to_string())?;
+            let mut source = fs::File::open(&path).map_err(|error| error.to_string())?;
+            let mut buffer = [0u8; 64 * 1024];
+            loop {
+                let read = source.read(&mut buffer).map_err(|error| error.to_string())?;
+                if read == 0 {
+                    break;
+                }
+                archive
+                    .write_all(&buffer[..read])
+                    .map_err(|error| error.to_string())?;
+            }
+        }
+    }
+
+    archive.finish().map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 pub fn backup_database(state: &AppState, destination: String) -> Result<(), String> {
