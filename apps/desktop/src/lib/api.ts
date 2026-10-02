@@ -3,6 +3,7 @@ import type {
   ActivityRecord,
   AppInfo,
   Client,
+  ClientContact,
   CompanyProfile,
   DashboardStats,
   DocumentRecord,
@@ -23,6 +24,12 @@ export const api = {
     invoke<number>('create_client', { client }),
   updateClient: (client: Client) => invoke<void>('update_client', { client }),
   deleteClient: (id: number) => invoke<void>('delete_client', { id }),
+
+  contacts: () => invoke<ClientContact[]>('list_client_contacts'),
+  createContact: (contact: Omit<ClientContact, 'id' | 'client_name' | 'created_at' | 'updated_at'>) =>
+    invoke<number>('create_client_contact', { contact }),
+  updateContact: (contact: ClientContact) => invoke<void>('update_client_contact', { contact }),
+  deleteContact: (id: number) => invoke<void>('delete_client_contact', { id }),
 
   projects: () => invoke<Project[]>('list_projects'),
   createProject: (project: Omit<Project, 'id' | 'client_name' | 'created_at'>) =>
@@ -66,6 +73,9 @@ export const api = {
 
   info: () => invoke<AppInfo>('app_info'),
   exportJson: (destination: string) => invoke<void>('export_workspace_json', { destination }),
+  exportCsv: (destination: string) => invoke<void>('export_workspace_csv', { destination }),
+  exportMarkdown: (destination: string) => invoke<void>('export_workspace_markdown', { destination }),
+  exportHtml: (destination: string) => invoke<void>('export_workspace_html', { destination }),
   backupDatabase: (destination: string) => invoke<void>('backup_database', { destination }),
   search: (query: string) => invoke<SearchHit[]>('global_search', { query })
 };
