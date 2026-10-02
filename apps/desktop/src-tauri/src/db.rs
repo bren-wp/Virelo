@@ -820,7 +820,9 @@ mod tests {
         let archive_names: Vec<String> = archive.file_names().map(str::to_string).collect();
         assert!(archive_names.iter().any(|name| name == "virelo-data.json"));
         assert!(archive_names.iter().any(|name| name == "virelo.sqlite3"));
-        assert!(archive_names.iter().any(|name| name.starts_with("documents/")));
+        assert!(archive_names
+            .iter()
+            .any(|name| name.starts_with("documents/")));
         assert!(archive.by_name("README.txt").is_ok());
 
         let stats = dashboard_stats(&state).expect("dashboard stats");
