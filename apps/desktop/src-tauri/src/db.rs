@@ -14,6 +14,8 @@ use crate::models::{
 
 pub struct AppState {
     pub conn: Mutex<Connection>,
+    pub data_dir: PathBuf,
+    pub database_path: PathBuf,
     pub documents_dir: PathBuf,
 }
 
@@ -30,9 +32,12 @@ impl AppState {
         let conn = Connection::open(database_path).map_err(|error| error.to_string())?;
         configure_database(&conn)?;
         migrate(&conn)?;
+        crate::extras::migrate(&conn)?;
 
         Ok(Self {
             conn: Mutex::new(conn),
+            data_dir,
+            database_path,
             documents_dir,
         })
     }
