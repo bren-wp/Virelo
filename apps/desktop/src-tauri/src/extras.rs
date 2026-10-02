@@ -6,7 +6,8 @@ use serde_json::json;
 use crate::{
     db::{self, AppState},
     models::{
-        ActivityRecord, AppInfo, Client, FinanceRecord, Note, Project, SearchHit, TaskRecord,
+        ActivityRecord, AppInfo, Client, ClientContact, FinanceRecord, Note, Project, SearchHit,
+        TaskRecord,
     },
 };
 
@@ -53,9 +54,23 @@ pub fn migrate(conn: &Connection) -> Result<(), String> {
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS client_contacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT '',
+            email TEXT NOT NULL DEFAULT '',
+            phone TEXT NOT NULL DEFAULT '',
+            notes TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_tasks_status_due ON tasks(status, due_date);
         CREATE INDEX IF NOT EXISTS idx_activities_happened_at ON activities(happened_at);
         CREATE INDEX IF NOT EXISTS idx_finance_kind_status ON finance_records(kind, status);
+        CREATE INDEX IF NOT EXISTS idx_client_contacts_client ON client_contacts(client_id);
+        CREATE INDEX IF NOT EXISTS idx_client_contacts_name ON client_contacts(name);
         "#,
     )
     .map_err(|error| error.to_string())
@@ -94,6 +109,95 @@ pub fn update_client(state: &AppState, client: Client) -> Result<(), String> {
         ],
     )
     .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub fn list_client_contacts(state: &AppState) -> Result<Vec<ClientContact>, String> {
+    let conn = lock(state)?;
+    let mut stmt = conn
+        .prepare(
+            r#"SELECT cc.id, cc.client_id, c.name, cc.name, cc.role, cc.email, cc.phone,
+                      cc.notes, cc.created_at, cc.updated_at
+               FROM client_contacts cc
+               INNER JOIN clients c ON c.id = cc.client_id
+               ORDER BY c.name COLLATE NOCASE, cc.name COLLATE NOCASE"#,
+        )
+        .map_err(|error| error.to_string())?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(ClientContact {
+                id: row.get(0)?,
+                client_id: row.get(1)?,
+                client_name: row.get(2)?,
+                name: row.get(3)?,
+                role: row.get(4)?,
+                email: row.get(5)?,
+                phone: row.get(6)?,
+                notes: row.get(7)?,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+pub fn create_client_contact(state: &AppState, contact: ClientContact) -> Result<i64, String> {
+    if contact.client_id <= 0 || contact.name.trim().is_empty() {
+        return Err("Klijent i ime kontakta su obavezni.".into());
+    }
+
+    let conn = lock(state)?;
+    conn.execute(
+        r#"INSERT INTO client_contacts (client_id, name, role, email, phone, notes)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6)"#,
+        params![
+            contact.client_id,
+            contact.name.trim(),
+            contact.role.trim(),
+            contact.email.trim(),
+            contact.phone.trim(),
+            contact.notes
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn update_client_contact(state: &AppState, contact: ClientContact) -> Result<(), String> {
+    if contact.id <= 0 || contact.client_id <= 0 || contact.name.trim().is_empty() {
+        return Err("Kontakt nije valjan.".into());
+    }
+
+    let conn = lock(state)?;
+    conn.execute(
+        r#"UPDATE client_contacts
+           SET client_id=?2, name=?3, role=?4, email=?5, phone=?6, notes=?7,
+               updated_at=CURRENT_TIMESTAMP
+           WHERE id=?1"#,
+        params![
+            contact.id,
+            contact.client_id,
+            contact.name.trim(),
+            contact.role.trim(),
+            contact.email.trim(),
+            contact.phone.trim(),
+            contact.notes
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+pub fn delete_client_contact(state: &AppState, id: i64) -> Result<(), String> {
+    let conn = lock(state)?;
+    conn.execute("DELETE FROM client_contacts WHERE id=?1", [id])
+        .map_err(|error| error.to_string())?;
     Ok(())
 }
 
@@ -427,6 +531,7 @@ pub fn export_workspace_json(state: &AppState, destination: String) -> Result<()
         "version": env!("CARGO_PKG_VERSION"),
         "company": db::get_company_profile(state)?,
         "clients": db::list_clients(state)?,
+        "contacts": list_client_contacts(state)?,
         "projects": db::list_projects(state)?,
         "notes": db::list_notes(state)?,
         "documents": db::list_documents(state)?,
@@ -437,6 +542,320 @@ pub fn export_workspace_json(state: &AppState, destination: String) -> Result<()
 
     let serialized = serde_json::to_string_pretty(&payload).map_err(|error| error.to_string())?;
     fs::write(destination, serialized).map_err(|error| error.to_string())
+}
+
+fn csv_cell(value: &str) -> String {
+    let escaped = value.replace('"', """");
+    format!(""{escaped}"")
+}
+
+fn html_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+pub fn export_workspace_csv(state: &AppState, destination: String) -> Result<(), String> {
+    let destination = Path::new(&destination);
+    if destination.as_os_str().is_empty() {
+        return Err("Odredište nije valjano.".into());
+    }
+
+    let mut rows = vec![
+        "vrsta,id,naziv,klijent,status,datum,iznos,valuta,porezni_id,email,telefon,biljeske"
+            .to_string(),
+    ];
+
+    for client in db::list_clients(state)? {
+        rows.push(
+            [
+                csv_cell("klijent"),
+                csv_cell(&client.id.to_string()),
+                csv_cell(&client.name),
+                csv_cell(""),
+                csv_cell(&client.status),
+                csv_cell(&client.created_at),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(&client.tax_id),
+                csv_cell(&client.email),
+                csv_cell(&client.phone),
+                csv_cell(&client.notes),
+            ]
+            .join(","),
+        );
+    }
+
+    for contact in list_client_contacts(state)? {
+        rows.push(
+            [
+                csv_cell("kontakt"),
+                csv_cell(&contact.id.to_string()),
+                csv_cell(&contact.name),
+                csv_cell(contact.client_name.as_deref().unwrap_or("")),
+                csv_cell(&contact.role),
+                csv_cell(&contact.created_at),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(&contact.email),
+                csv_cell(&contact.phone),
+                csv_cell(&contact.notes),
+            ]
+            .join(","),
+        );
+    }
+
+    for project in db::list_projects(state)? {
+        rows.push(
+            [
+                csv_cell("projekt"),
+                csv_cell(&project.id.to_string()),
+                csv_cell(&project.name),
+                csv_cell(project.client_name.as_deref().unwrap_or("")),
+                csv_cell(&project.status),
+                csv_cell(&project.due_date),
+                csv_cell(&(project.value_cents as f64 / 100.0).to_string()),
+                csv_cell(&project.currency),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(&project.notes),
+            ]
+            .join(","),
+        );
+    }
+
+    for task in list_tasks(state)? {
+        rows.push(
+            [
+                csv_cell("zadatak"),
+                csv_cell(&task.id.to_string()),
+                csv_cell(&task.title),
+                csv_cell(task.client_name.as_deref().unwrap_or("")),
+                csv_cell(&task.status),
+                csv_cell(&task.due_date),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(&task.notes),
+            ]
+            .join(","),
+        );
+    }
+
+    for record in list_finance_records(state)? {
+        rows.push(
+            [
+                csv_cell(&record.kind.to_lowercase()),
+                csv_cell(&record.id.to_string()),
+                csv_cell(&record.title),
+                csv_cell(record.client_name.as_deref().unwrap_or("")),
+                csv_cell(&record.status),
+                csv_cell(&record.issue_date),
+                csv_cell(&(record.amount_cents as f64 / 100.0).to_string()),
+                csv_cell(&record.currency),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(&record.notes),
+            ]
+            .join(","),
+        );
+    }
+
+    fs::write(destination, rows.join("\n")).map_err(|error| error.to_string())
+}
+
+pub fn export_workspace_markdown(state: &AppState, destination: String) -> Result<(), String> {
+    let destination = Path::new(&destination);
+    if destination.as_os_str().is_empty() {
+        return Err("Odredište nije valjano.".into());
+    }
+
+    let company = db::get_company_profile(state)?;
+    let clients = db::list_clients(state)?;
+    let contacts = list_client_contacts(state)?;
+    let projects = db::list_projects(state)?;
+    let tasks = list_tasks(state)?;
+    let notes = db::list_notes(state)?;
+    let activities = list_activities(state)?;
+    let finance = list_finance_records(state)?;
+
+    let mut md = format!(
+        "# Virelo izvoz\n\n## Firma\n\n**{}**  \n{} {}  \n{} {}  \nIBAN: {}  \n\n",
+        company.name,
+        company.address,
+        company.city,
+        company.tax_id,
+        company.registration_id,
+        company.iban
+    );
+
+    md.push_str("## Klijenti\n\n");
+    for client in clients {
+        md.push_str(&format!(
+            "### {}\n- Status: {}\n- Porezni ID: {}\n- E-mail: {}\n- Telefon: {}\n- Grad: {}\n\n{}\n\n",
+            client.name,
+            client.status,
+            client.tax_id,
+            client.email,
+            client.phone,
+            client.city,
+            client.notes
+        ));
+    }
+
+    md.push_str("## Kontakti\n\n");
+    for contact in contacts {
+        md.push_str(&format!(
+            "- **{}** — {} · {} · {} · {}\n",
+            contact.name,
+            contact.client_name.unwrap_or_default(),
+            contact.role,
+            contact.email,
+            contact.phone
+        ));
+    }
+
+    md.push_str("\n## Projekti\n\n");
+    for project in projects {
+        md.push_str(&format!(
+            "### {}\n- Klijent: {}\n- Status: {}\n- Prioritet: {}\n- Rok: {}\n- Vrijednost: {:.2} {}\n\n{}\n\n",
+            project.name,
+            project.client_name.unwrap_or_default(),
+            project.status,
+            project.priority,
+            project.due_date,
+            project.value_cents as f64 / 100.0,
+            project.currency,
+            project.notes
+        ));
+    }
+
+    md.push_str("## Zadaci\n\n");
+    for task in tasks {
+        md.push_str(&format!(
+            "- [{}] **{}** · {} · rok {}\n",
+            if task.status == "Završen" { "x" } else { " " },
+            task.title,
+            task.priority,
+            task.due_date
+        ));
+    }
+
+    md.push_str("\n## Bilješke\n\n");
+    for note in notes {
+        md.push_str(&format!("### {}\n\n{}\n\n", note.title, note.body_markdown));
+    }
+
+    md.push_str("## Aktivnosti\n\n");
+    for activity in activities {
+        md.push_str(&format!(
+            "- **{}** · {} · {}\n  {}\n",
+            activity.title, activity.kind, activity.happened_at, activity.details
+        ));
+    }
+
+    md.push_str("\n## Financije\n\n");
+    for record in finance {
+        md.push_str(&format!(
+            "- **{}** · {} · {:.2} {} · {}\n",
+            record.title,
+            record.kind,
+            record.amount_cents as f64 / 100.0,
+            record.currency,
+            record.status
+        ));
+    }
+
+    fs::write(destination, md).map_err(|error| error.to_string())
+}
+
+pub fn export_workspace_html(state: &AppState, destination: String) -> Result<(), String> {
+    let destination = Path::new(&destination);
+    if destination.as_os_str().is_empty() {
+        return Err("Odredište nije valjano.".into());
+    }
+
+    let company = db::get_company_profile(state)?;
+    let clients = db::list_clients(state)?;
+    let contacts = list_client_contacts(state)?;
+    let projects = db::list_projects(state)?;
+    let tasks = list_tasks(state)?;
+    let finance = list_finance_records(state)?;
+
+    let mut html = format!(
+        "<!doctype html><html lang=\"hr\"><meta charset=\"utf-8\"><title>Virelo izvoz</title><style>body{{font-family:system-ui;margin:40px;max-width:1100px}}table{{width:100%;border-collapse:collapse;margin:16px 0 32px}}th,td{{border-bottom:1px solid #ddd;padding:8px;text-align:left}}h1,h2{{margin-top:28px}}small{{color:#666}}</style><body><h1>Virelo</h1><h2>{}</h2><p>{}, {}<br>{}<br>{}</p>",
+        html_escape(&company.name),
+        html_escape(&company.address),
+        html_escape(&company.city),
+        html_escape(&company.email),
+        html_escape(&company.phone)
+    );
+
+    html.push_str("<h2>Klijenti</h2><table><tr><th>Naziv</th><th>Status</th><th>ID</th><th>E-mail</th><th>Telefon</th></tr>");
+    for client in clients {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+            html_escape(&client.name),
+            html_escape(&client.status),
+            html_escape(&client.tax_id),
+            html_escape(&client.email),
+            html_escape(&client.phone)
+        ));
+    }
+    html.push_str("</table><h2>Kontakti</h2><table><tr><th>Ime</th><th>Klijent</th><th>Uloga</th><th>E-mail</th><th>Telefon</th></tr>");
+    for contact in contacts {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+            html_escape(&contact.name),
+            html_escape(contact.client_name.as_deref().unwrap_or("")),
+            html_escape(&contact.role),
+            html_escape(&contact.email),
+            html_escape(&contact.phone)
+        ));
+    }
+    html.push_str("</table><h2>Projekti</h2><table><tr><th>Projekt</th><th>Klijent</th><th>Status</th><th>Rok</th><th>Vrijednost</th></tr>");
+    for project in projects {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{:.2} {}</td></tr>",
+            html_escape(&project.name),
+            html_escape(project.client_name.as_deref().unwrap_or("")),
+            html_escape(&project.status),
+            html_escape(&project.due_date),
+            project.value_cents as f64 / 100.0,
+            html_escape(&project.currency)
+        ));
+    }
+    html.push_str("</table><h2>Zadaci</h2><table><tr><th>Zadatak</th><th>Status</th><th>Prioritet</th><th>Rok</th></tr>");
+    for task in tasks {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+            html_escape(&task.title),
+            html_escape(&task.status),
+            html_escape(&task.priority),
+            html_escape(&task.due_date)
+        ));
+    }
+    html.push_str("</table><h2>Financije</h2><table><tr><th>Naziv</th><th>Vrsta</th><th>Status</th><th>Iznos</th></tr>");
+    for record in finance {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{:.2} {}</td></tr>",
+            html_escape(&record.title),
+            html_escape(&record.kind),
+            html_escape(&record.status),
+            record.amount_cents as f64 / 100.0,
+            html_escape(&record.currency)
+        ));
+    }
+    html.push_str("</table></body></html>");
+
+    fs::write(destination, html).map_err(|error| error.to_string())
 }
 
 pub fn backup_database(state: &AppState, destination: String) -> Result<(), String> {
@@ -472,6 +891,11 @@ pub fn global_search(state: &AppState, query: String) -> Result<Vec<SearchHit>, 
             r#"
             SELECT 'client', id, name, COALESCE(email, '') || ' ' || COALESCE(tax_id, '')
             FROM clients WHERE name LIKE ?1 OR email LIKE ?1 OR tax_id LIKE ?1 OR notes LIKE ?1
+            UNION ALL
+            SELECT 'contact', cc.id, cc.name, c.name || ' ' || cc.role || ' ' || cc.email
+            FROM client_contacts cc
+            INNER JOIN clients c ON c.id=cc.client_id
+            WHERE cc.name LIKE ?1 OR cc.role LIKE ?1 OR cc.email LIKE ?1 OR cc.phone LIKE ?1 OR cc.notes LIKE ?1
             UNION ALL
             SELECT 'project', id, name, status || ' ' || COALESCE(due_date, '')
             FROM projects WHERE name LIKE ?1 OR notes LIKE ?1
