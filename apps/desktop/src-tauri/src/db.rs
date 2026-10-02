@@ -19,7 +19,10 @@ pub struct AppState {
 
 impl AppState {
     pub fn initialize(app: &AppHandle) -> Result<Self, String> {
-        let data_dir = app.path().app_data_dir().map_err(|error| error.to_string())?;
+        let data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?;
         let documents_dir = data_dir.join("documents");
         fs::create_dir_all(&documents_dir).map_err(|error| error.to_string())?;
 
@@ -28,7 +31,10 @@ impl AppState {
         configure_database(&conn)?;
         migrate(&conn)?;
 
-        Ok(Self { conn: Mutex::new(conn), documents_dir })
+        Ok(Self {
+            conn: Mutex::new(conn),
+            documents_dir,
+        })
     }
 }
 
@@ -125,7 +131,10 @@ fn migrate(conn: &Connection) -> Result<(), String> {
 }
 
 fn lock(state: &AppState) -> Result<std::sync::MutexGuard<'_, Connection>, String> {
-    state.conn.lock().map_err(|_| "Baza podataka nije dostupna.".to_string())
+    state
+        .conn
+        .lock()
+        .map_err(|_| "Baza podataka nije dostupna.".to_string())
 }
 
 pub fn dashboard_stats(state: &AppState) -> Result<DashboardStats, String> {
@@ -135,7 +144,8 @@ pub fn dashboard_stats(state: &AppState) -> Result<DashboardStats, String> {
             Some(filter) => format!("SELECT COUNT(*) FROM {table} WHERE {filter}"),
             None => format!("SELECT COUNT(*) FROM {table}"),
         };
-        conn.query_row(&sql, [], |row| row.get(0)).map_err(|error| error.to_string())
+        conn.query_row(&sql, [], |row| row.get(0))
+            .map_err(|error| error.to_string())
     };
 
     Ok(DashboardStats {
@@ -191,9 +201,20 @@ pub fn save_company_profile(state: &AppState, profile: CompanyProfile) -> Result
              website=excluded.website, iban=excluded.iban, bic=excluded.bic,
              bank_name=excluded.bank_name, notes=excluded.notes, updated_at=CURRENT_TIMESTAMP"#,
         params![
-            profile.name, profile.tax_id, profile.registration_id, profile.address, profile.city,
-            profile.postal_code, profile.country, profile.email, profile.phone, profile.website,
-            profile.iban, profile.bic, profile.bank_name, profile.notes
+            profile.name,
+            profile.tax_id,
+            profile.registration_id,
+            profile.address,
+            profile.city,
+            profile.postal_code,
+            profile.country,
+            profile.email,
+            profile.phone,
+            profile.website,
+            profile.iban,
+            profile.bic,
+            profile.bank_name,
+            profile.notes
         ],
     )
     .map_err(|error| error.to_string())?;
@@ -202,28 +223,35 @@ pub fn save_company_profile(state: &AppState, profile: CompanyProfile) -> Result
 
 pub fn list_clients(state: &AppState) -> Result<Vec<Client>, String> {
     let conn = lock(state)?;
-    let mut stmt = conn.prepare(
-        "SELECT id, name, tax_id, registration_id, email, phone, website, address, city,
-                country, status, notes, created_at FROM clients ORDER BY name COLLATE NOCASE"
-    ).map_err(|error| error.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, tax_id, registration_id, email, phone, website, address, city,
+                country, status, notes, created_at FROM clients ORDER BY name COLLATE NOCASE",
+        )
+        .map_err(|error| error.to_string())?;
 
-    let rows = stmt.query_map([], |row| Ok(Client {
-        id: row.get(0)?,
-        name: row.get(1)?,
-        tax_id: row.get(2)?,
-        registration_id: row.get(3)?,
-        email: row.get(4)?,
-        phone: row.get(5)?,
-        website: row.get(6)?,
-        address: row.get(7)?,
-        city: row.get(8)?,
-        country: row.get(9)?,
-        status: row.get(10)?,
-        notes: row.get(11)?,
-        created_at: row.get(12)?,
-    })).map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(Client {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                tax_id: row.get(2)?,
+                registration_id: row.get(3)?,
+                email: row.get(4)?,
+                phone: row.get(5)?,
+                website: row.get(6)?,
+                address: row.get(7)?,
+                city: row.get(8)?,
+                country: row.get(9)?,
+                status: row.get(10)?,
+                notes: row.get(11)?,
+                created_at: row.get(12)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
 
-    rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
 }
 
 pub fn create_client(state: &AppState, client: Client) -> Result<i64, String> {
@@ -236,44 +264,61 @@ pub fn create_client(state: &AppState, client: Client) -> Result<i64, String> {
          (name, tax_id, registration_id, email, phone, website, address, city, country, status, notes)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
-            client.name.trim(), client.tax_id.trim(), client.registration_id.trim(),
-            client.email.trim(), client.phone.trim(), client.website.trim(), client.address.trim(),
-            client.city.trim(), client.country.trim(), client.status.trim(), client.notes
+            client.name.trim(),
+            client.tax_id.trim(),
+            client.registration_id.trim(),
+            client.email.trim(),
+            client.phone.trim(),
+            client.website.trim(),
+            client.address.trim(),
+            client.city.trim(),
+            client.country.trim(),
+            client.status.trim(),
+            client.notes
         ],
-    ).map_err(|error| error.to_string())?;
+    )
+    .map_err(|error| error.to_string())?;
     Ok(conn.last_insert_rowid())
 }
 
 pub fn delete_client(state: &AppState, id: i64) -> Result<(), String> {
     let conn = lock(state)?;
-    conn.execute("DELETE FROM clients WHERE id = ?1", [id]).map_err(|error| error.to_string())?;
+    conn.execute("DELETE FROM clients WHERE id = ?1", [id])
+        .map_err(|error| error.to_string())?;
     Ok(())
 }
 
 pub fn list_projects(state: &AppState) -> Result<Vec<Project>, String> {
     let conn = lock(state)?;
-    let mut stmt = conn.prepare(
-        "SELECT p.id, p.client_id, c.name, p.name, p.status, p.priority, p.due_date,
+    let mut stmt = conn
+        .prepare(
+            "SELECT p.id, p.client_id, c.name, p.name, p.status, p.priority, p.due_date,
                 p.value_cents, p.currency, p.notes, p.created_at
          FROM projects p LEFT JOIN clients c ON c.id = p.client_id
-         ORDER BY CASE WHEN p.status = 'Završen' THEN 1 ELSE 0 END, p.due_date, p.name"
-    ).map_err(|error| error.to_string())?;
+         ORDER BY CASE WHEN p.status = 'Završen' THEN 1 ELSE 0 END, p.due_date, p.name",
+        )
+        .map_err(|error| error.to_string())?;
 
-    let rows = stmt.query_map([], |row| Ok(Project {
-        id: row.get(0)?,
-        client_id: row.get(1)?,
-        client_name: row.get(2)?,
-        name: row.get(3)?,
-        status: row.get(4)?,
-        priority: row.get(5)?,
-        due_date: row.get(6)?,
-        value_cents: row.get(7)?,
-        currency: row.get(8)?,
-        notes: row.get(9)?,
-        created_at: row.get(10)?,
-    })).map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(Project {
+                id: row.get(0)?,
+                client_id: row.get(1)?,
+                client_name: row.get(2)?,
+                name: row.get(3)?,
+                status: row.get(4)?,
+                priority: row.get(5)?,
+                due_date: row.get(6)?,
+                value_cents: row.get(7)?,
+                currency: row.get(8)?,
+                notes: row.get(9)?,
+                created_at: row.get(10)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
 
-    rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
 }
 
 pub fn create_project(state: &AppState, project: Project) -> Result<i64, String> {
@@ -285,37 +330,52 @@ pub fn create_project(state: &AppState, project: Project) -> Result<i64, String>
         "INSERT INTO projects (client_id, name, status, priority, due_date, value_cents, currency, notes)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
-            project.client_id, project.name.trim(), project.status.trim(), project.priority.trim(),
-            project.due_date.trim(), project.value_cents, project.currency.trim(), project.notes
+            project.client_id,
+            project.name.trim(),
+            project.status.trim(),
+            project.priority.trim(),
+            project.due_date.trim(),
+            project.value_cents,
+            project.currency.trim(),
+            project.notes
         ],
-    ).map_err(|error| error.to_string())?;
+    )
+    .map_err(|error| error.to_string())?;
     Ok(conn.last_insert_rowid())
 }
 
 pub fn delete_project(state: &AppState, id: i64) -> Result<(), String> {
     let conn = lock(state)?;
-    conn.execute("DELETE FROM projects WHERE id = ?1", [id]).map_err(|error| error.to_string())?;
+    conn.execute("DELETE FROM projects WHERE id = ?1", [id])
+        .map_err(|error| error.to_string())?;
     Ok(())
 }
 
 pub fn list_notes(state: &AppState) -> Result<Vec<Note>, String> {
     let conn = lock(state)?;
-    let mut stmt = conn.prepare(
-        "SELECT id, title, body_markdown, client_id, project_id, tags, updated_at
-         FROM notes ORDER BY updated_at DESC, id DESC"
-    ).map_err(|error| error.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, title, body_markdown, client_id, project_id, tags, updated_at
+         FROM notes ORDER BY updated_at DESC, id DESC",
+        )
+        .map_err(|error| error.to_string())?;
 
-    let rows = stmt.query_map([], |row| Ok(Note {
-        id: row.get(0)?,
-        title: row.get(1)?,
-        body_markdown: row.get(2)?,
-        client_id: row.get(3)?,
-        project_id: row.get(4)?,
-        tags: row.get(5)?,
-        updated_at: row.get(6)?,
-    })).map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(Note {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                body_markdown: row.get(2)?,
+                client_id: row.get(3)?,
+                project_id: row.get(4)?,
+                tags: row.get(5)?,
+                updated_at: row.get(6)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
 
-    rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
 }
 
 pub fn create_note(state: &AppState, note: Note) -> Result<i64, String> {
@@ -326,35 +386,50 @@ pub fn create_note(state: &AppState, note: Note) -> Result<i64, String> {
     conn.execute(
         "INSERT INTO notes (title, body_markdown, client_id, project_id, tags)
          VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![note.title.trim(), note.body_markdown, note.client_id, note.project_id, note.tags.trim()],
-    ).map_err(|error| error.to_string())?;
+        params![
+            note.title.trim(),
+            note.body_markdown,
+            note.client_id,
+            note.project_id,
+            note.tags.trim()
+        ],
+    )
+    .map_err(|error| error.to_string())?;
     Ok(conn.last_insert_rowid())
 }
 
 pub fn delete_note(state: &AppState, id: i64) -> Result<(), String> {
     let conn = lock(state)?;
-    conn.execute("DELETE FROM notes WHERE id = ?1", [id]).map_err(|error| error.to_string())?;
+    conn.execute("DELETE FROM notes WHERE id = ?1", [id])
+        .map_err(|error| error.to_string())?;
     Ok(())
 }
 
 pub fn list_documents(state: &AppState) -> Result<Vec<DocumentRecord>, String> {
     let conn = lock(state)?;
-    let mut stmt = conn.prepare(
-        "SELECT id, title, file_name, file_path, client_id, project_id, created_at
-         FROM documents ORDER BY created_at DESC, id DESC"
-    ).map_err(|error| error.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, title, file_name, file_path, client_id, project_id, created_at
+         FROM documents ORDER BY created_at DESC, id DESC",
+        )
+        .map_err(|error| error.to_string())?;
 
-    let rows = stmt.query_map([], |row| Ok(DocumentRecord {
-        id: row.get(0)?,
-        title: row.get(1)?,
-        file_name: row.get(2)?,
-        file_path: row.get(3)?,
-        client_id: row.get(4)?,
-        project_id: row.get(5)?,
-        created_at: row.get(6)?,
-    })).map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(DocumentRecord {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                file_name: row.get(2)?,
+                file_path: row.get(3)?,
+                client_id: row.get(4)?,
+                project_id: row.get(5)?,
+                created_at: row.get(6)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
 
-    rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
 }
 
 pub fn import_document(
@@ -369,7 +444,9 @@ pub fn import_document(
         return Err("Odabrana datoteka ne postoji.".into());
     }
 
-    let file_name = source.file_name().and_then(|name| name.to_str())
+    let file_name = source
+        .file_name()
+        .and_then(|name| name.to_str())
         .ok_or_else(|| "Naziv datoteke nije valjan.".to_string())?;
 
     let stored_name = format!("{}_{}", Uuid::new_v4(), file_name);
@@ -382,8 +459,15 @@ pub fn import_document(
         "INSERT INTO documents (title, file_name, file_path, client_id, project_id)
          VALUES (?1, ?2, ?3, ?4, ?5)",
         params![
-            if title.trim().is_empty() { file_name } else { title.trim() },
-            file_name, destination_text, client_id, project_id
+            if title.trim().is_empty() {
+                file_name
+            } else {
+                title.trim()
+            },
+            file_name,
+            destination_text,
+            client_id,
+            project_id
         ],
     );
 
@@ -397,13 +481,17 @@ pub fn import_document(
 
 pub fn delete_document(state: &AppState, id: i64) -> Result<(), String> {
     let conn = lock(state)?;
-    let file_path: Option<String> = conn.query_row(
-        "SELECT file_path FROM documents WHERE id = ?1",
-        [id],
-        |row| row.get(0),
-    ).optional().map_err(|error| error.to_string())?;
+    let file_path: Option<String> = conn
+        .query_row(
+            "SELECT file_path FROM documents WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
 
-    conn.execute("DELETE FROM documents WHERE id = ?1", [id]).map_err(|error| error.to_string())?;
+    conn.execute("DELETE FROM documents WHERE id = ?1", [id])
+        .map_err(|error| error.to_string())?;
     drop(conn);
 
     if let Some(file_path) = file_path {
@@ -423,8 +511,9 @@ pub fn global_search(state: &AppState, query: String) -> Result<Vec<SearchHit>, 
 
     let pattern = format!("%{query}%");
     let conn = lock(state)?;
-    let mut stmt = conn.prepare(
-        r#"
+    let mut stmt = conn
+        .prepare(
+            r#"
         SELECT 'client', id, name, COALESCE(email, '') || ' ' || COALESCE(tax_id, '')
         FROM clients WHERE name LIKE ?1 OR email LIKE ?1 OR tax_id LIKE ?1 OR notes LIKE ?1
         UNION ALL
@@ -437,15 +526,21 @@ pub fn global_search(state: &AppState, query: String) -> Result<Vec<SearchHit>, 
         SELECT 'document', id, title, file_name
         FROM documents WHERE title LIKE ?1 OR file_name LIKE ?1
         LIMIT 30
-        "#
-    ).map_err(|error| error.to_string())?;
+        "#,
+        )
+        .map_err(|error| error.to_string())?;
 
-    let rows = stmt.query_map([pattern], |row| Ok(SearchHit {
-        kind: row.get(0)?,
-        id: row.get(1)?,
-        title: row.get(2)?,
-        subtitle: row.get(3)?,
-    })).map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([pattern], |row| {
+            Ok(SearchHit {
+                kind: row.get(0)?,
+                id: row.get(1)?,
+                title: row.get(2)?,
+                subtitle: row.get(3)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
 
-    rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
 }
