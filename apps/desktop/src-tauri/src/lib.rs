@@ -264,6 +264,16 @@ fn export_workspace_html(state: State<'_, AppState>, destination: String) -> Res
 }
 
 #[tauri::command]
+fn export_workspace_yaml(state: State<'_, AppState>, destination: String) -> Result<(), String> {
+    extras::export_workspace_yaml(&state, destination)
+}
+
+#[tauri::command]
+fn export_workspace_xml(state: State<'_, AppState>, destination: String) -> Result<(), String> {
+    extras::export_workspace_xml(&state, destination)
+}
+
+#[tauri::command]
 fn backup_database(state: State<'_, AppState>, destination: String) -> Result<(), String> {
     extras::backup_database(&state, destination)
 }
@@ -330,6 +340,8 @@ pub fn run() {
             export_workspace_csv,
             export_workspace_markdown,
             export_workspace_html,
+            export_workspace_yaml,
+            export_workspace_xml,
             backup_database,
             global_search
         ])
