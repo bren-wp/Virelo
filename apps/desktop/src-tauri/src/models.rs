@@ -1,0 +1,96 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize)]
+pub struct DashboardStats {
+    pub clients: i64,
+    pub active_projects: i64,
+    pub notes: i64,
+    pub documents: i64,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct CompanyProfile {
+    pub name: String,
+    pub tax_id: String,
+    pub registration_id: String,
+    pub address: String,
+    pub city: String,
+    pub postal_code: String,
+    pub country: String,
+    pub email: String,
+    pub phone: String,
+    pub website: String,
+    pub iban: String,
+    pub bic: String,
+    pub bank_name: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Client {
+    #[serde(default)]
+    pub id: i64,
+    pub name: String,
+    pub tax_id: String,
+    pub registration_id: String,
+    pub email: String,
+    pub phone: String,
+    pub website: String,
+    pub address: String,
+    pub city: String,
+    pub country: String,
+    pub status: String,
+    pub notes: String,
+    #[serde(default)]
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Project {
+    #[serde(default)]
+    pub id: i64,
+    pub client_id: Option<i64>,
+    #[serde(default)]
+    pub client_name: Option<String>,
+    pub name: String,
+    pub status: String,
+    pub priority: String,
+    pub due_date: String,
+    pub value_cents: i64,
+    pub currency: String,
+    pub notes: String,
+    #[serde(default)]
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Note {
+    #[serde(default)]
+    pub id: i64,
+    pub title: String,
+    pub body_markdown: String,
+    pub client_id: Option<i64>,
+    pub project_id: Option<i64>,
+    pub tags: String,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DocumentRecord {
+    pub id: i64,
+    pub title: String,
+    pub file_name: String,
+    pub file_path: String,
+    pub client_id: Option<i64>,
+    pub project_id: Option<i64>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SearchHit {
+    pub kind: String,
+    pub id: i64,
+    pub title: String,
+    pub subtitle: String,
+}
