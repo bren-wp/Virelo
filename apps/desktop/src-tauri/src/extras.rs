@@ -545,8 +545,8 @@ pub fn export_workspace_json(state: &AppState, destination: String) -> Result<()
 }
 
 fn csv_cell(value: &str) -> String {
-    let escaped = value.replace('"', """");
-    format!(""{escaped}"")
+    let escaped = value.replace('"', "\"\"");
+    format!("\"{escaped}\"")
 }
 
 fn html_escape(value: &str) -> String {
