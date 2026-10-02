@@ -792,7 +792,7 @@
 
   <main class="main">
     <div class="topbar">
-      <button class="menu-button" aria-label="Otvori navigaciju" onclick={() => (sidebarOpen = true)}>☰</button>
+      <button class="menu-button" aria-label="Otvori navigaciju" onclick={() => (sidebarOpen = true)}><Icon name="menu" size={19} /></button>
       <div class="search-wrap">
         <span class="search-icon"><Icon name="search" size={17} /></span>
         <input
