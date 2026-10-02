@@ -6,8 +6,8 @@ use tauri::{Manager, State};
 
 use db::AppState;
 use models::{
-    ActivityRecord, AppInfo, Client, CompanyProfile, DashboardStats, DocumentRecord, FinanceRecord,
-    Note, Project, SearchHit, TaskRecord,
+    ActivityRecord, AppInfo, Client, ClientContact, CompanyProfile, DashboardStats, DocumentRecord,
+    FinanceRecord, Note, Project, SearchHit, TaskRecord,
 };
 
 #[tauri::command]
@@ -43,6 +43,32 @@ fn update_client(state: State<'_, AppState>, client: Client) -> Result<(), Strin
 #[tauri::command]
 fn delete_client(state: State<'_, AppState>, id: i64) -> Result<(), String> {
     db::delete_client(&state, id)
+}
+
+#[tauri::command]
+fn list_client_contacts(state: State<'_, AppState>) -> Result<Vec<ClientContact>, String> {
+    extras::list_client_contacts(&state)
+}
+
+#[tauri::command]
+fn create_client_contact(
+    state: State<'_, AppState>,
+    contact: ClientContact,
+) -> Result<i64, String> {
+    extras::create_client_contact(&state, contact)
+}
+
+#[tauri::command]
+fn update_client_contact(
+    state: State<'_, AppState>,
+    contact: ClientContact,
+) -> Result<(), String> {
+    extras::update_client_contact(&state, contact)
+}
+
+#[tauri::command]
+fn delete_client_contact(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    extras::delete_client_contact(&state, id)
 }
 
 #[tauri::command]
@@ -183,6 +209,21 @@ fn export_workspace_json(state: State<'_, AppState>, destination: String) -> Res
 }
 
 #[tauri::command]
+fn export_workspace_csv(state: State<'_, AppState>, destination: String) -> Result<(), String> {
+    extras::export_workspace_csv(&state, destination)
+}
+
+#[tauri::command]
+fn export_workspace_markdown(state: State<'_, AppState>, destination: String) -> Result<(), String> {
+    extras::export_workspace_markdown(&state, destination)
+}
+
+#[tauri::command]
+fn export_workspace_html(state: State<'_, AppState>, destination: String) -> Result<(), String> {
+    extras::export_workspace_html(&state, destination)
+}
+
+#[tauri::command]
 fn backup_database(state: State<'_, AppState>, destination: String) -> Result<(), String> {
     extras::backup_database(&state, destination)
 }
@@ -209,6 +250,10 @@ pub fn run() {
             create_client,
             update_client,
             delete_client,
+            list_client_contacts,
+            create_client_contact,
+            update_client_contact,
+            delete_client_contact,
             list_projects,
             create_project,
             update_project,
@@ -234,6 +279,9 @@ pub fn run() {
             delete_finance_record,
             app_info,
             export_workspace_json,
+            export_workspace_csv,
+            export_workspace_markdown,
+            export_workspace_html,
             backup_database,
             global_search
         ])
