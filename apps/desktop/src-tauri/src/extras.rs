@@ -923,6 +923,46 @@ pub fn export_workspace_csv(state: &AppState, destination: String) -> Result<(),
         );
     }
 
+    for account in list_bank_accounts(state)? {
+        rows.push(
+            [
+                csv_cell("bankovni_racun"),
+                csv_cell(&account.id.to_string()),
+                csv_cell(&account.label),
+                csv_cell(""),
+                csv_cell(if account.is_default { "Zadani" } else { "" }),
+                csv_cell(&account.created_at),
+                csv_cell(""),
+                csv_cell(&account.currency),
+                csv_cell(&account.iban),
+                csv_cell(&account.bank_name),
+                csv_cell(&account.bic),
+                csv_cell(&account.notes),
+            ]
+            .join(","),
+        );
+    }
+
+    for contract in list_contracts(state)? {
+        rows.push(
+            [
+                csv_cell("ugovor"),
+                csv_cell(&contract.id.to_string()),
+                csv_cell(&contract.title),
+                csv_cell(contract.client_name.as_deref().unwrap_or("")),
+                csv_cell(&contract.status),
+                csv_cell(&contract.end_date),
+                csv_cell(&(contract.value_cents as f64 / 100.0).to_string()),
+                csv_cell(&contract.currency),
+                csv_cell(&contract.number),
+                csv_cell(contract.project_name.as_deref().unwrap_or("")),
+                csv_cell(contract.document_title.as_deref().unwrap_or("")),
+                csv_cell(&contract.notes),
+            ]
+            .join(","),
+        );
+    }
+
     for project in db::list_projects(state)? {
         rows.push(
             [
@@ -1056,6 +1096,8 @@ pub fn export_workspace_markdown(state: &AppState, destination: String) -> Resul
     let company = db::get_company_profile(state)?;
     let clients = db::list_clients(state)?;
     let contacts = list_client_contacts(state)?;
+    let bank_accounts = list_bank_accounts(state)?;
+    let contracts = list_contracts(state)?;
     let projects = db::list_projects(state)?;
     let tasks = list_tasks(state)?;
     let notes = db::list_notes(state)?;
@@ -1095,6 +1137,35 @@ pub fn export_workspace_markdown(state: &AppState, destination: String) -> Resul
             contact.role,
             contact.email,
             contact.phone
+        ));
+    }
+
+    md.push_str("\n## Bankovni računi\n\n");
+    for account in bank_accounts {
+        md.push_str(&format!(
+            "- **{}** · {} · {} · {}{}\n",
+            account.label,
+            account.iban,
+            account.bank_name,
+            account.currency,
+            if account.is_default { " · zadani" } else { "" }
+        ));
+    }
+
+    md.push_str("\n## Ugovori\n\n");
+    for contract in contracts {
+        md.push_str(&format!(
+            "### {}\n- Broj: {}\n- Klijent: {}\n- Projekt: {}\n- Status: {}\n- Početak: {}\n- Završetak: {}\n- Vrijednost: {:.2} {}\n\n{}\n\n",
+            contract.title,
+            contract.number,
+            contract.client_name.unwrap_or_default(),
+            contract.project_name.unwrap_or_default(),
+            contract.status,
+            contract.start_date,
+            contract.end_date,
+            contract.value_cents as f64 / 100.0,
+            contract.currency,
+            contract.notes
         ));
     }
 
@@ -1169,6 +1240,8 @@ pub fn export_workspace_html(state: &AppState, destination: String) -> Result<()
     let company = db::get_company_profile(state)?;
     let clients = db::list_clients(state)?;
     let contacts = list_client_contacts(state)?;
+    let bank_accounts = list_bank_accounts(state)?;
+    let contracts = list_contracts(state)?;
     let projects = db::list_projects(state)?;
     let tasks = list_tasks(state)?;
     let notes = db::list_notes(state)?;
@@ -1207,6 +1280,31 @@ pub fn export_workspace_html(state: &AppState, destination: String) -> Result<()
             html_escape(&contact.phone)
         ));
     }
+    html.push_str("</table><h2>Bankovni računi</h2><table><tr><th>Naziv</th><th>IBAN</th><th>Banka</th><th>Valuta</th><th>Zadani</th></tr>");
+    for account in bank_accounts {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+            html_escape(&account.label),
+            html_escape(&account.iban),
+            html_escape(&account.bank_name),
+            html_escape(&account.currency),
+            if account.is_default { "Da" } else { "Ne" }
+        ));
+    }
+
+    html.push_str("</table><h2>Ugovori</h2><table><tr><th>Ugovor</th><th>Klijent</th><th>Status</th><th>Završetak</th><th>Vrijednost</th></tr>");
+    for contract in contracts {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{:.2} {}</td></tr>",
+            html_escape(&contract.title),
+            html_escape(contract.client_name.as_deref().unwrap_or("")),
+            html_escape(&contract.status),
+            html_escape(&contract.end_date),
+            contract.value_cents as f64 / 100.0,
+            html_escape(&contract.currency)
+        ));
+    }
+
     html.push_str("</table><h2>Projekti</h2><table><tr><th>Projekt</th><th>Klijent</th><th>Status</th><th>Rok</th><th>Vrijednost</th></tr>");
     for project in projects {
         html.push_str(&format!(
