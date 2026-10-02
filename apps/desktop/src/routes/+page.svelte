@@ -1142,7 +1142,7 @@
       </div>
     {:else if section === 'finance'}
       <h1 class="page-title">Financije</h1>
-      <p class="page-subtitle">Ponude, računi i troškovi kao lokalna poslovna evidencija.</p>
+      <p class="page-subtitle">Ponude, računi i troškovi povezani s klijentima i poslovanjem.</p>
       <div class="card form-grid">
         <label>Vrsta<select class="field" bind:value={financeForm.kind}><option>Ponuda</option><option>Račun</option><option>Trošak</option><option>Ostalo</option></select></label>
         <label>Broj / oznaka<input class="field" bind:value={financeForm.number} /></label>
