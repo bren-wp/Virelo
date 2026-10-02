@@ -1,13 +1,14 @@
 use std::{fs, path::Path, sync::MutexGuard};
 
 use rusqlite::{params, Connection};
+use serde::Serialize;
 use serde_json::json;
 
 use crate::{
     db::{self, AppState},
     models::{
-        ActivityRecord, AppInfo, BankAccount, Client, ClientContact, ContractRecord, FinanceRecord, Note,
-        Project, SearchHit, TaskRecord,
+        ActivityRecord, AppInfo, BankAccount, Client, ClientContact, CompanyProfile, ContractRecord,
+        DocumentRecord, FinanceRecord, Note, Project, SearchHit, TaskRecord,
     },
 };
 
@@ -775,6 +776,40 @@ pub fn app_info(_state: &AppState) -> AppInfo {
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename = "virelo_export")]
+struct ExportBundle {
+    version: String,
+    company: CompanyProfile,
+    clients: Vec<Client>,
+    contacts: Vec<ClientContact>,
+    bank_accounts: Vec<BankAccount>,
+    contracts: Vec<ContractRecord>,
+    projects: Vec<Project>,
+    notes: Vec<Note>,
+    documents: Vec<DocumentRecord>,
+    tasks: Vec<TaskRecord>,
+    activities: Vec<ActivityRecord>,
+    finance: Vec<FinanceRecord>,
+}
+
+fn build_export_bundle(state: &AppState) -> Result<ExportBundle, String> {
+    Ok(ExportBundle {
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        company: db::get_company_profile(state)?,
+        clients: db::list_clients(state)?,
+        contacts: list_client_contacts(state)?,
+        bank_accounts: list_bank_accounts(state)?,
+        contracts: list_contracts(state)?,
+        projects: db::list_projects(state)?,
+        notes: db::list_notes(state)?,
+        documents: db::list_documents(state)?,
+        tasks: list_tasks(state)?,
+        activities: list_activities(state)?,
+        finance: list_finance_records(state)?,
+    })
+}
+
 pub fn export_workspace_json(state: &AppState, destination: String) -> Result<(), String> {
     let destination = Path::new(&destination);
     if destination.as_os_str().is_empty() {
@@ -799,6 +834,29 @@ pub fn export_workspace_json(state: &AppState, destination: String) -> Result<()
 
     let serialized = serde_json::to_string_pretty(&payload).map_err(|error| error.to_string())?;
     fs::write(destination, serialized).map_err(|error| error.to_string())
+}
+
+pub fn export_workspace_yaml(state: &AppState, destination: String) -> Result<(), String> {
+    let destination = Path::new(&destination);
+    if destination.as_os_str().is_empty() {
+        return Err("Odredište nije valjano.".into());
+    }
+
+    let bundle = build_export_bundle(state)?;
+    let serialized = serde_yaml::to_string(&bundle).map_err(|error| error.to_string())?;
+    fs::write(destination, serialized).map_err(|error| error.to_string())
+}
+
+pub fn export_workspace_xml(state: &AppState, destination: String) -> Result<(), String> {
+    let destination = Path::new(&destination);
+    if destination.as_os_str().is_empty() {
+        return Err("Odredište nije valjano.".into());
+    }
+
+    let bundle = build_export_bundle(state)?;
+    let serialized = quick_xml::se::to_string(&bundle).map_err(|error| error.to_string())?;
+    let xml = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{serialized}");
+    fs::write(destination, xml).map_err(|error| error.to_string())
 }
 
 fn csv_cell(value: &str) -> String {
