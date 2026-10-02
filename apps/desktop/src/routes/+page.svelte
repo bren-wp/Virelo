@@ -945,6 +945,33 @@
     }).length;
   }
 
+  function expiringContracts() {
+    return contracts
+      .filter((contract) => {
+        const days = dateDeltaDays(contract.end_date);
+        return !['Završen', 'Otkazan'].includes(contract.status) &&
+          days !== null &&
+          days >= 0 &&
+          days <= 30;
+      })
+      .sort((a, b) => a.end_date.localeCompare(b.end_date))
+      .slice(0, 5);
+  }
+
+  function overdueInvoices() {
+    return finance
+      .filter((record) => {
+        const days = dateDeltaDays(record.due_date);
+        return record.kind === 'Račun' &&
+          !['Plaćeno', 'Otkazano'].includes(record.status) &&
+          days !== null &&
+          days < 0;
+      })
+      .sort((a, b) => a.due_date.localeCompare(b.due_date))
+      .slice(0, 5);
+  }
+
+
   onMount(() => {
     void refresh().catch((error) => showMessage(friendlyError(error), true));
 
@@ -1097,6 +1124,40 @@
               </div>
             {:else}
               <div class="empty compact">Još nema aktivnosti.</div>
+            {/each}
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="section-heading">
+            <div><strong>Ugovori koji istječu</strong><span>Sljedećih 30 dana</span></div>
+            <button class="text-button" onclick={() => navigate('contracts')}>Svi ugovori</button>
+          </div>
+          <div class="compact-list">
+            {#each expiringContracts() as contract}
+              <div>
+                <strong>{contract.title}</strong>
+                <span>{contract.client_name || 'bez klijenta'} · {formatDate(contract.end_date)}</span>
+              </div>
+            {:else}
+              <div class="empty compact">Nema ugovora koji uskoro istječu.</div>
+            {/each}
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="section-heading">
+            <div><strong>Dospjeli računi</strong><span>Za provjeru naplate</span></div>
+            <button class="text-button" onclick={() => navigate('finance')}>Financije</button>
+          </div>
+          <div class="compact-list">
+            {#each overdueInvoices() as record}
+              <div>
+                <strong>{record.title}</strong>
+                <span>{money(record.amount_cents, record.currency)} · {formatDate(record.due_date)}</span>
+              </div>
+            {:else}
+              <div class="empty compact">Nema dospjelih računa.</div>
             {/each}
           </div>
         </section>
