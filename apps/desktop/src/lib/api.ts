@@ -90,6 +90,8 @@ export const api = {
   exportCsv: (destination: string) => invoke<void>('export_workspace_csv', { destination }),
   exportMarkdown: (destination: string) => invoke<void>('export_workspace_markdown', { destination }),
   exportHtml: (destination: string) => invoke<void>('export_workspace_html', { destination }),
+  exportYaml: (destination: string) => invoke<void>('export_workspace_yaml', { destination }),
+  exportXml: (destination: string) => invoke<void>('export_workspace_xml', { destination }),
   backupDatabase: (destination: string) => invoke<void>('backup_database', { destination }),
   search: (query: string) => invoke<SearchHit[]>('global_search', { query })
 };
