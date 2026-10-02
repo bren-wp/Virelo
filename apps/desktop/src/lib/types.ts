@@ -1,4 +1,14 @@
-export type Section = 'dashboard' | 'company' | 'clients' | 'projects' | 'notes' | 'documents';
+export type Section =
+  | 'dashboard'
+  | 'company'
+  | 'clients'
+  | 'projects'
+  | 'tasks'
+  | 'notes'
+  | 'documents'
+  | 'activities'
+  | 'finance'
+  | 'settings';
 
 export interface DashboardStats {
   clients: number;
@@ -74,9 +84,60 @@ export interface DocumentRecord {
   created_at: string;
 }
 
+export interface TaskRecord {
+  id: number;
+  title: string;
+  client_id: number | null;
+  client_name: string | null;
+  project_id: number | null;
+  project_name: string | null;
+  status: string;
+  priority: string;
+  due_date: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ActivityRecord {
+  id: number;
+  kind: string;
+  title: string;
+  details: string;
+  client_id: number | null;
+  client_name: string | null;
+  project_id: number | null;
+  project_name: string | null;
+  happened_at: string;
+  created_at: string;
+}
+
+export interface FinanceRecord {
+  id: number;
+  kind: string;
+  number: string;
+  title: string;
+  client_id: number | null;
+  client_name: string | null;
+  amount_cents: number;
+  currency: string;
+  status: string;
+  issue_date: string;
+  due_date: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SearchHit {
   kind: string;
   id: number;
   title: string;
   subtitle: string;
+}
+
+export interface AppInfo {
+  version: string;
+  data_dir: string;
+  database_path: string;
 }
