@@ -7,8 +7,8 @@ use serde_json::json;
 use crate::{
     db::{self, AppState},
     models::{
-        ActivityRecord, AppInfo, BankAccount, Client, ClientContact, CompanyProfile, ContractRecord,
-        DocumentRecord, FinanceRecord, Note, Project, SearchHit, TaskRecord,
+        ActivityRecord, AppInfo, BankAccount, Client, ClientContact, CompanyProfile,
+        ContractRecord, DocumentRecord, FinanceRecord, Note, Project, SearchHit, TaskRecord,
     },
 };
 
@@ -236,7 +236,6 @@ pub fn delete_client_contact(state: &AppState, id: i64) -> Result<(), String> {
         .map_err(|error| error.to_string())?;
     Ok(())
 }
-
 
 pub fn list_bank_accounts(state: &AppState) -> Result<Vec<BankAccount>, String> {
     let conn = lock(state)?;
