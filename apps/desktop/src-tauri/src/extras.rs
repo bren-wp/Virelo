@@ -648,6 +648,66 @@ pub fn export_workspace_csv(state: &AppState, destination: String) -> Result<(),
         );
     }
 
+    for note in db::list_notes(state)? {
+        rows.push(
+            [
+                csv_cell("biljeska"),
+                csv_cell(&note.id.to_string()),
+                csv_cell(&note.title),
+                csv_cell(""),
+                csv_cell(&note.tags),
+                csv_cell(&note.updated_at),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(&note.body_markdown),
+            ]
+            .join(","),
+        );
+    }
+
+    for document in db::list_documents(state)? {
+        rows.push(
+            [
+                csv_cell("dokument"),
+                csv_cell(&document.id.to_string()),
+                csv_cell(&document.title),
+                csv_cell(""),
+                csv_cell(&document.file_name),
+                csv_cell(&document.created_at),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+            ]
+            .join(","),
+        );
+    }
+
+    for activity in list_activities(state)? {
+        rows.push(
+            [
+                csv_cell("aktivnost"),
+                csv_cell(&activity.id.to_string()),
+                csv_cell(&activity.title),
+                csv_cell(activity.client_name.as_deref().unwrap_or("")),
+                csv_cell(&activity.kind),
+                csv_cell(&activity.happened_at),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(""),
+                csv_cell(&activity.details),
+            ]
+            .join(","),
+        );
+    }
+
     for record in list_finance_records(state)? {
         rows.push(
             [
@@ -668,7 +728,8 @@ pub fn export_workspace_csv(state: &AppState, destination: String) -> Result<(),
         );
     }
 
-    fs::write(destination, rows.join("\n")).map_err(|error| error.to_string())
+    fs::write(destination, format!("\u{feff}{}", rows.join("\n")))
+        .map_err(|error| error.to_string())
 }
 
 pub fn export_workspace_markdown(state: &AppState, destination: String) -> Result<(), String> {
@@ -753,7 +814,15 @@ pub fn export_workspace_markdown(state: &AppState, destination: String) -> Resul
         md.push_str(&format!("### {}\n\n{}\n\n", note.title, note.body_markdown));
     }
 
-    md.push_str("## Aktivnosti\n\n");
+    md.push_str("## Dokumenti\n\n");
+    for document in db::list_documents(state)? {
+        md.push_str(&format!(
+            "- **{}** · {} · {}\n",
+            document.title, document.file_name, document.created_at
+        ));
+    }
+
+    md.push_str("\n## Aktivnosti\n\n");
     for activity in activities {
         md.push_str(&format!(
             "- **{}** · {} · {}\n  {}\n",
@@ -787,6 +856,9 @@ pub fn export_workspace_html(state: &AppState, destination: String) -> Result<()
     let contacts = list_client_contacts(state)?;
     let projects = db::list_projects(state)?;
     let tasks = list_tasks(state)?;
+    let notes = db::list_notes(state)?;
+    let documents = db::list_documents(state)?;
+    let activities = list_activities(state)?;
     let finance = list_finance_records(state)?;
 
     let mut html = format!(
@@ -842,6 +914,38 @@ pub fn export_workspace_html(state: &AppState, destination: String) -> Result<()
             html_escape(&task.due_date)
         ));
     }
+    html.push_str("</table><h2>Bilješke</h2><table><tr><th>Naslov</th><th>Oznake</th><th>Sadržaj</th></tr>");
+    for note in notes {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td></tr>",
+            html_escape(&note.title),
+            html_escape(&note.tags),
+            html_escape(&note.body_markdown)
+        ));
+    }
+
+    html.push_str("</table><h2>Dokumenti</h2><table><tr><th>Naziv</th><th>Datoteka</th><th>Datum</th></tr>");
+    for document in documents {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td></tr>",
+            html_escape(&document.title),
+            html_escape(&document.file_name),
+            html_escape(&document.created_at)
+        ));
+    }
+
+    html.push_str("</table><h2>Aktivnosti</h2><table><tr><th>Naslov</th><th>Vrsta</th><th>Klijent</th><th>Datum</th><th>Detalji</th></tr>");
+    for activity in activities {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+            html_escape(&activity.title),
+            html_escape(&activity.kind),
+            html_escape(activity.client_name.as_deref().unwrap_or("")),
+            html_escape(&activity.happened_at),
+            html_escape(&activity.details)
+        ));
+    }
+
     html.push_str("</table><h2>Financije</h2><table><tr><th>Naziv</th><th>Vrsta</th><th>Status</th><th>Iznos</th></tr>");
     for record in finance {
         html.push_str(&format!(
