@@ -17,7 +17,9 @@
   stroke-linejoin="round"
   aria-hidden="true"
 >
-  {#if name === 'home'}
+  {#if name === 'menu'}
+    <path d="M4 7h16M4 12h16M4 17h16" />
+  {:else if name === 'home'}
     <path d="M3 10.5 12 3l9 7.5" />
     <path d="M5 9.5V21h14V9.5" />
     <path d="M9 21v-7h6v7" />
