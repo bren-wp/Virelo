@@ -59,10 +59,7 @@ fn create_client_contact(
 }
 
 #[tauri::command]
-fn update_client_contact(
-    state: State<'_, AppState>,
-    contact: ClientContact,
-) -> Result<(), String> {
+fn update_client_contact(state: State<'_, AppState>, contact: ClientContact) -> Result<(), String> {
     extras::update_client_contact(&state, contact)
 }
 
@@ -214,7 +211,10 @@ fn export_workspace_csv(state: State<'_, AppState>, destination: String) -> Resu
 }
 
 #[tauri::command]
-fn export_workspace_markdown(state: State<'_, AppState>, destination: String) -> Result<(), String> {
+fn export_workspace_markdown(
+    state: State<'_, AppState>,
+    destination: String,
+) -> Result<(), String> {
     extras::export_workspace_markdown(&state, destination)
 }
 
