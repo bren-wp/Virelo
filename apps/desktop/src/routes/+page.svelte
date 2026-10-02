@@ -800,6 +800,18 @@
     await run(() => api.exportXml(destination), 'XML izvoz je spremljen.');
   }
 
+  async function exportArchive() {
+    const destination = await save({
+      defaultPath: 'Virelo-potpuna-arhiva.zip',
+      filters: [{ name: 'Virelo arhiva', extensions: ['zip'] }]
+    });
+    if (!destination) return;
+    await run(
+      () => api.exportArchive(destination),
+      'Potpuna Virelo arhiva s podacima i dokumentima je spremljena.'
+    );
+  }
+
   async function backupDatabase() {
     const destination = await save({
       defaultPath: 'Virelo-sigurnosna-kopija.db',
@@ -896,6 +908,41 @@
     } catch {
       return `${(cents / 100).toFixed(2)} ${currency}`;
     }
+  }
+
+  function dateDeltaDays(value: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+    const target = new Date(`${value}T00:00:00`);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.ceil((target.getTime() - today.getTime()) / 86_400_000);
+  }
+
+  function overdueTasksCount() {
+    return tasks.filter((task) => {
+      const days = dateDeltaDays(task.due_date);
+      return task.status !== 'Završen' && days !== null && days < 0;
+    }).length;
+  }
+
+  function expiringContractsCount() {
+    return contracts.filter((contract) => {
+      const days = dateDeltaDays(contract.end_date);
+      return !['Završen', 'Otkazan'].includes(contract.status) &&
+        days !== null &&
+        days >= 0 &&
+        days <= 30;
+    }).length;
+  }
+
+  function overdueFinanceCount() {
+    return finance.filter((record) => {
+      const days = dateDeltaDays(record.due_date);
+      return record.kind === 'Račun' &&
+        !['Plaćeno', 'Otkazano'].includes(record.status) &&
+        days !== null &&
+        days < 0;
+    }).length;
   }
 
   onMount(() => {
@@ -1002,6 +1049,18 @@
           <div class="stat-head"><Icon name="check" size={18} /><span>Otvoreni zadaci</span></div>
           <div class="stat-value">{tasks.filter((task) => task.status !== 'Završen').length}</div>
         </button>
+        <button class:attention={overdueTasksCount() > 0} class="card stat-card" onclick={() => navigate('tasks')}>
+          <div class="stat-head"><Icon name="alert" size={18} /><span>Zakašnjeli zadaci</span></div>
+          <div class="stat-value">{overdueTasksCount()}</div>
+        </button>
+        <button class:attention={expiringContractsCount() > 0} class="card stat-card" onclick={() => navigate('contracts')}>
+          <div class="stat-head"><Icon name="clock" size={18} /><span>Ugovori do 30 dana</span></div>
+          <div class="stat-value">{expiringContractsCount()}</div>
+        </button>
+        <button class:attention={overdueFinanceCount() > 0} class="card stat-card" onclick={() => navigate('finance')}>
+          <div class="stat-head"><Icon name="invoice" size={18} /><span>Dospjeli računi</span></div>
+          <div class="stat-value">{overdueFinanceCount()}</div>
+        </button>
         <button class="card stat-card" onclick={() => navigate('documents')}>
           <div class="stat-head"><Icon name="file" size={18} /><span>Dokumenti</span></div><div class="stat-value">{stats.documents}</div>
         </button>
@@ -1060,7 +1119,7 @@
         <label>SWIFT / BIC<input class="field" bind:value={company.bic} /></label>
         <label>Banka<input class="field" bind:value={company.bank_name} /></label>
         <label class="wide">Bilješke<textarea class="field" bind:value={company.notes}></textarea></label>
-        <div class="wide form-actions"><button class="button primary" disabled={busy} onclick={saveCompany}>Spremi podatke</button></div>
+        <div class="wide form-actions"><button class="button primary" disabled={busy} onclick={saveCompany}><Icon name="save" size={15} />Spremi podatke</button></div>
       </div>
     {:else if section === 'clients'}
       <h1 class="page-title">Klijenti</h1>
@@ -1078,7 +1137,7 @@
         <label>Država<input class="field" bind:value={clientForm.country} /></label>
         <label class="wide">Bilješke<textarea class="field" bind:value={clientForm.notes}></textarea></label>
         <div class="wide form-actions">
-          <button class="button primary" disabled={busy} onclick={saveClient}>{editingClientId ? 'Spremi izmjene' : 'Dodaj klijenta'}</button>
+          <button class="button primary" disabled={busy} onclick={saveClient}><Icon name={editingClientId ? 'save' : 'plus'} size={15} />{editingClientId ? 'Spremi izmjene' : 'Dodaj klijenta'}</button>
           {#if editingClientId}<button class="button" onclick={resetClientForm}>Odustani</button>{/if}
         </div>
       </div>
@@ -1248,7 +1307,7 @@
         <label>Valuta<select class="field" bind:value={projectForm.currency}><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></label>
         <label class="wide">Bilješke<textarea class="field" bind:value={projectForm.notes}></textarea></label>
         <div class="wide form-actions">
-          <button class="button primary" disabled={busy} onclick={saveProject}>{editingProjectId ? 'Spremi izmjene' : 'Dodaj projekt'}</button>
+          <button class="button primary" disabled={busy} onclick={saveProject}><Icon name={editingProjectId ? 'save' : 'plus'} size={15} />{editingProjectId ? 'Spremi izmjene' : 'Dodaj projekt'}</button>
           {#if editingProjectId}<button class="button" onclick={resetProjectForm}>Odustani</button>{/if}
         </div>
       </div>
@@ -1283,7 +1342,7 @@
         <label>Rok<input class="field" type="date" bind:value={taskForm.due_date} /></label>
         <label class="wide">Bilješke<textarea class="field" bind:value={taskForm.notes}></textarea></label>
         <div class="wide form-actions">
-          <button class="button primary" disabled={busy} onclick={saveTask}>{editingTaskId ? 'Spremi izmjene' : 'Dodaj zadatak'}</button>
+          <button class="button primary" disabled={busy} onclick={saveTask}><Icon name={editingTaskId ? 'save' : 'plus'} size={15} />{editingTaskId ? 'Spremi izmjene' : 'Dodaj zadatak'}</button>
           {#if editingTaskId}<button class="button" onclick={resetTaskForm}>Odustani</button>{/if}
         </div>
       </div>
@@ -1315,7 +1374,7 @@
         <label class="wide">Tagovi<input class="field" bind:value={noteForm.tags} placeholder="ugovor, sastanak, hitno" /></label>
         <label class="wide">Sadržaj<textarea class="field note-editor" bind:value={noteForm.body_markdown}></textarea></label>
         <div class="wide form-actions">
-          <button class="button primary" disabled={busy} onclick={saveNote}>{editingNoteId ? 'Spremi izmjene' : 'Dodaj bilješku'}</button>
+          <button class="button primary" disabled={busy} onclick={saveNote}><Icon name={editingNoteId ? 'save' : 'plus'} size={15} />{editingNoteId ? 'Spremi izmjene' : 'Dodaj bilješku'}</button>
           {#if editingNoteId}<button class="button" onclick={resetNoteForm}>Odustani</button>{/if}
         </div>
       </div>
@@ -1343,11 +1402,11 @@
         {#if documentEditId}
           <label class="wide">Naziv dokumenta<input class="field" bind:value={documentTitle} /></label>
           <div class="wide form-actions">
-            <button class="button primary" onclick={saveDocumentMetadata}>Spremi podatke dokumenta</button>
+            <button class="button primary" onclick={saveDocumentMetadata}><Icon name="save" size={15} />Spremi podatke dokumenta</button>
             <button class="button" onclick={() => { documentEditId = null; documentTitle = ''; documentClientId = null; documentProjectId = null; }}>Odustani</button>
           </div>
         {:else}
-          <div class="wide form-actions"><button class="button primary" disabled={busy} onclick={addDocument}>Uvezi dokument</button></div>
+          <div class="wide form-actions"><button class="button primary" disabled={busy} onclick={addDocument}><Icon name="upload" size={15} />Uvezi dokument</button></div>
         {/if}
       </div>
 
@@ -1376,7 +1435,7 @@
         <label>Klijent<select class="field" bind:value={activityForm.client_id}><option value={null}>Bez klijenta</option>{#each clients as client}<option value={client.id}>{client.name}</option>{/each}</select></label>
         <label>Projekt<select class="field" bind:value={activityForm.project_id}><option value={null}>Bez projekta</option>{#each projects as project}<option value={project.id}>{project.name}</option>{/each}</select></label>
         <label class="wide">Detalji<textarea class="field" bind:value={activityForm.details}></textarea></label>
-        <div class="wide form-actions"><button class="button primary" disabled={busy} onclick={saveActivity}>Dodaj aktivnost</button></div>
+        <div class="wide form-actions"><button class="button primary" disabled={busy} onclick={saveActivity}><Icon name="plus" size={15} />Dodaj aktivnost</button></div>
       </div>
       <div class="timeline">
         {#each activities as activity}
@@ -1410,7 +1469,7 @@
         <label>Datum dospijeća<input class="field" type="date" bind:value={financeForm.due_date} /></label>
         <label class="wide">Bilješke<textarea class="field" bind:value={financeForm.notes}></textarea></label>
         <div class="wide form-actions">
-          <button class="button primary" disabled={busy} onclick={saveFinance}>{editingFinanceId ? 'Spremi izmjene' : 'Dodaj zapis'}</button>
+          <button class="button primary" disabled={busy} onclick={saveFinance}><Icon name={editingFinanceId ? 'save' : 'plus'} size={15} />{editingFinanceId ? 'Spremi izmjene' : 'Dodaj zapis'}</button>
           {#if editingFinanceId}<button class="button" onclick={resetFinanceForm}>Odustani</button>{/if}
         </div>
       </div>
@@ -1437,6 +1496,12 @@
       <p class="page-subtitle">Spremi sigurnosnu kopiju ili izvezi poslovne podatke kada god želiš.</p>
 
       <div class="settings-grid export-grid">
+        <section class="card export-card featured-export">
+          <div class="export-icon"><Icon name="archive" size={20} /></div>
+          <h2>Potpuna Virelo arhiva</h2>
+          <p class="muted">Standardni ZIP s bazom, čitljivim JSON podacima i svim uvezenim dokumentima.</p>
+          <button class="button primary" disabled={busy} onclick={exportArchive}><Icon name="archive" size={15} />Spremi ZIP arhivu</button>
+        </section>
         <section class="card export-card">
           <div class="export-icon"><Icon name="backup" size={20} /></div>
           <h2>Sigurnosna kopija</h2>
