@@ -163,10 +163,7 @@ fn create_finance_record(state: State<'_, AppState>, record: FinanceRecord) -> R
 }
 
 #[tauri::command]
-fn update_finance_record(
-    state: State<'_, AppState>,
-    record: FinanceRecord,
-) -> Result<(), String> {
+fn update_finance_record(state: State<'_, AppState>, record: FinanceRecord) -> Result<(), String> {
     extras::update_finance_record(&state, record)
 }
 
