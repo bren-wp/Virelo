@@ -410,11 +410,9 @@ pub fn delete_finance_record(state: &AppState, id: i64) -> Result<(), String> {
     Ok(())
 }
 
-pub fn app_info(state: &AppState) -> AppInfo {
+pub fn app_info(_state: &AppState) -> AppInfo {
     AppInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
-        data_dir: state.data_dir.to_string_lossy().to_string(),
-        database_path: state.database_path.to_string_lossy().to_string(),
     }
 }
 
