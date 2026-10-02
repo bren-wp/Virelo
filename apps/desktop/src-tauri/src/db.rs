@@ -550,7 +550,6 @@ pub fn global_search(state: &AppState, query: String) -> Result<Vec<SearchHit>, 
         .map_err(|error| error.to_string())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -719,8 +718,7 @@ mod tests {
             1
         );
 
-        let search =
-            extras::global_search(&state, "Virelo QA".into()).expect("global search");
+        let search = extras::global_search(&state, "Virelo QA".into()).expect("global search");
         assert!(search.iter().any(|hit| hit.kind == "project"));
 
         let stats = dashboard_stats(&state).expect("dashboard stats");
