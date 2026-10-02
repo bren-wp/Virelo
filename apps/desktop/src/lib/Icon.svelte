@@ -80,6 +80,13 @@
   {:else if name === 'briefcase'}
     <rect x="3" y="7" width="18" height="13" rx="2" />
     <path d="M8 7V4h8v3M3 12h18M10 12v2h4v-2" />
+  {:else if name === 'bank'}
+    <path d="M3 9h18M5 9v9M9 9v9M15 9v9M19 9v9M3 18h18M2 21h20" />
+    <path d="m12 3 9 4H3z" />
+  {:else if name === 'contract'}
+    <path d="M6 2h9l5 5v15H6z" />
+    <path d="M15 2v6h5M9 12h7M9 16h5" />
+    <path d="m14 20 2-2 2 2" />
   {:else}
     <path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
   {/if}
