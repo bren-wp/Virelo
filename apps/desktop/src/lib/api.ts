@@ -2,9 +2,11 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   ActivityRecord,
   AppInfo,
+  BankAccount,
   Client,
   ClientContact,
   CompanyProfile,
+  ContractRecord,
   DashboardStats,
   DocumentRecord,
   FinanceRecord,
@@ -30,6 +32,18 @@ export const api = {
     invoke<number>('create_client_contact', { contact }),
   updateContact: (contact: ClientContact) => invoke<void>('update_client_contact', { contact }),
   deleteContact: (id: number) => invoke<void>('delete_client_contact', { id }),
+
+  bankAccounts: () => invoke<BankAccount[]>('list_bank_accounts'),
+  createBankAccount: (account: Omit<BankAccount, 'id' | 'created_at' | 'updated_at'>) =>
+    invoke<number>('create_bank_account', { account }),
+  updateBankAccount: (account: BankAccount) => invoke<void>('update_bank_account', { account }),
+  deleteBankAccount: (id: number) => invoke<void>('delete_bank_account', { id }),
+
+  contracts: () => invoke<ContractRecord[]>('list_contracts'),
+  createContract: (contract: Omit<ContractRecord, 'id' | 'client_name' | 'project_name' | 'document_title' | 'created_at' | 'updated_at'>) =>
+    invoke<number>('create_contract', { contract }),
+  updateContract: (contract: ContractRecord) => invoke<void>('update_contract', { contract }),
+  deleteContract: (id: number) => invoke<void>('delete_contract', { id }),
 
   projects: () => invoke<Project[]>('list_projects'),
   createProject: (project: Omit<Project, 'id' | 'client_name' | 'created_at'>) =>
