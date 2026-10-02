@@ -2,13 +2,15 @@
 
 **Virelo** je desktop poslovni sustav za organizaciju podataka firme, klijenata, kontakt-osoba, projekata, zadataka, bilješki, dokumenata, aktivnosti i financijske evidencije.
 
-## Virelo 1.2
+## Virelo 1.3
 
 Virelo objedinjuje:
 
 - podatke firme: OIB / PIB / DIČ, MBO / MBS / IČO, adresa, kontakti, IBAN, SWIFT/BIC i banka
 - klijente s poslovnim i poreznim podacima
 - kontakt-osobe svakog klijenta s funkcijom, e-mailom, telefonom i bilješkama
+- više bankovnih računa s IBAN-om, SWIFT/BIC-om, bankom, valutom i zadanim računom
+- ugovore povezane s klijentima, projektima i dokumentima, uz status, rok i vrijednost
 - projekte sa statusima, prioritetima, rokovima i vrijednostima
 - zadatke povezane s klijentima i projektima
 - Markdown bilješke i oznake
@@ -17,7 +19,7 @@ Virelo objedinjuje:
 - ponude, račune, troškove i druge financijske zapise
 - globalnu pretragu kroz sve glavne module
 - sigurnosnu kopiju baze
-- izvoz u JSON, CSV, Markdown i HTML
+- izvoz u JSON, CSV, Markdown, HTML, YAML i XML
 
 ## Windows aplikacija
 
@@ -42,6 +44,8 @@ Virelo podržava više otvorenih formata:
 - **CSV** — tablični izvoz za Excel, Numbers i druge alate
 - **Markdown** — čitljiva tekstualna arhiva
 - **HTML** — samostalni izvještaj koji se otvara u pregledniku
+- **YAML** — čitljiv strukturirani format
+- **XML** — standardni razmjenski format za druge sustave
 - **DB sigurnosna kopija** — cjelovita kopija baze
 
 ## Tehnologije
