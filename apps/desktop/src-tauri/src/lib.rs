@@ -6,8 +6,8 @@ use tauri::{Manager, State};
 
 use db::AppState;
 use models::{
-    ActivityRecord, AppInfo, Client, ClientContact, CompanyProfile, DashboardStats, DocumentRecord,
-    FinanceRecord, Note, Project, SearchHit, TaskRecord,
+    ActivityRecord, AppInfo, BankAccount, Client, ClientContact, CompanyProfile, ContractRecord,
+    DashboardStats, DocumentRecord, FinanceRecord, Note, Project, SearchHit, TaskRecord,
 };
 
 #[tauri::command]
@@ -66,6 +66,46 @@ fn update_client_contact(state: State<'_, AppState>, contact: ClientContact) -> 
 #[tauri::command]
 fn delete_client_contact(state: State<'_, AppState>, id: i64) -> Result<(), String> {
     extras::delete_client_contact(&state, id)
+}
+
+#[tauri::command]
+fn list_bank_accounts(state: State<'_, AppState>) -> Result<Vec<BankAccount>, String> {
+    extras::list_bank_accounts(&state)
+}
+
+#[tauri::command]
+fn create_bank_account(state: State<'_, AppState>, account: BankAccount) -> Result<i64, String> {
+    extras::create_bank_account(&state, account)
+}
+
+#[tauri::command]
+fn update_bank_account(state: State<'_, AppState>, account: BankAccount) -> Result<(), String> {
+    extras::update_bank_account(&state, account)
+}
+
+#[tauri::command]
+fn delete_bank_account(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    extras::delete_bank_account(&state, id)
+}
+
+#[tauri::command]
+fn list_contracts(state: State<'_, AppState>) -> Result<Vec<ContractRecord>, String> {
+    extras::list_contracts(&state)
+}
+
+#[tauri::command]
+fn create_contract(state: State<'_, AppState>, contract: ContractRecord) -> Result<i64, String> {
+    extras::create_contract(&state, contract)
+}
+
+#[tauri::command]
+fn update_contract(state: State<'_, AppState>, contract: ContractRecord) -> Result<(), String> {
+    extras::update_contract(&state, contract)
+}
+
+#[tauri::command]
+fn delete_contract(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    extras::delete_contract(&state, id)
 }
 
 #[tauri::command]
@@ -224,6 +264,16 @@ fn export_workspace_html(state: State<'_, AppState>, destination: String) -> Res
 }
 
 #[tauri::command]
+fn export_workspace_yaml(state: State<'_, AppState>, destination: String) -> Result<(), String> {
+    extras::export_workspace_yaml(&state, destination)
+}
+
+#[tauri::command]
+fn export_workspace_xml(state: State<'_, AppState>, destination: String) -> Result<(), String> {
+    extras::export_workspace_xml(&state, destination)
+}
+
+#[tauri::command]
 fn backup_database(state: State<'_, AppState>, destination: String) -> Result<(), String> {
     extras::backup_database(&state, destination)
 }
@@ -254,6 +304,14 @@ pub fn run() {
             create_client_contact,
             update_client_contact,
             delete_client_contact,
+            list_bank_accounts,
+            create_bank_account,
+            update_bank_account,
+            delete_bank_account,
+            list_contracts,
+            create_contract,
+            update_contract,
+            delete_contract,
             list_projects,
             create_project,
             update_project,
@@ -282,6 +340,8 @@ pub fn run() {
             export_workspace_csv,
             export_workspace_markdown,
             export_workspace_html,
+            export_workspace_yaml,
+            export_workspace_xml,
             backup_database,
             global_search
         ])

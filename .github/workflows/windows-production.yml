@@ -97,22 +97,22 @@ jobs:
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Virelo-Windows-1.2.0
+          name: Virelo-Windows-1.3.0
           path: |
             artifacts/Virelo-Portable.exe
             artifacts/Virelo-Setup.exe
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish v1.2.0 GitHub Release
+      - name: Publish v1.3.0 GitHub Release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "v1.2.0"
+          $tag = "v1.3.0"
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --target "${{ github.sha }}" --title "Virelo v1.2.0" --notes "Virelo 1.2 uklanja Windows konzolni prozor, dodaje novi Virelo vizualni identitet i ikonografiju, kontakt-osobe klijenata te JSON, CSV, Markdown i HTML izvoz. Sadrži provjereni Setup i Portable EXE."
+            gh release create $tag --target "${{ github.sha }}" --title "Virelo v1.3.0" --notes "Virelo 1.3 dodaje više bankovnih računa, zaseban modul ugovora, proširenu globalnu pretragu te JSON, CSV, Markdown, HTML, YAML i XML izvoz. Windows GUI subsystem, Setup i Portable buildovi su provjereni. Sadrži provjereni Setup i Portable EXE."
           }
           gh release upload $tag "artifacts/Virelo-Portable.exe" "artifacts/Virelo-Setup.exe" --clobber

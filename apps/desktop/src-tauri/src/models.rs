@@ -64,6 +64,51 @@ pub struct ClientContact {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct BankAccount {
+    #[serde(default)]
+    pub id: i64,
+    pub label: String,
+    pub iban: String,
+    pub bic: String,
+    pub bank_name: String,
+    pub currency: String,
+    pub is_default: bool,
+    pub notes: String,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ContractRecord {
+    #[serde(default)]
+    pub id: i64,
+    pub number: String,
+    pub title: String,
+    pub client_id: Option<i64>,
+    #[serde(default)]
+    pub client_name: Option<String>,
+    pub project_id: Option<i64>,
+    #[serde(default)]
+    pub project_name: Option<String>,
+    pub document_id: Option<i64>,
+    #[serde(default)]
+    pub document_title: Option<String>,
+    pub status: String,
+    pub signed_date: String,
+    pub start_date: String,
+    pub end_date: String,
+    pub value_cents: i64,
+    pub currency: String,
+    pub notes: String,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Project {
     #[serde(default)]
     pub id: i64,

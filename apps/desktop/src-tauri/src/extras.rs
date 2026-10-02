@@ -1,13 +1,14 @@
 use std::{fs, path::Path, sync::MutexGuard};
 
 use rusqlite::{params, Connection};
+use serde::Serialize;
 use serde_json::json;
 
 use crate::{
     db::{self, AppState},
     models::{
-        ActivityRecord, AppInfo, Client, ClientContact, FinanceRecord, Note, Project, SearchHit,
-        TaskRecord,
+        ActivityRecord, AppInfo, BankAccount, Client, ClientContact, CompanyProfile,
+        ContractRecord, DocumentRecord, FinanceRecord, Note, Project, SearchHit, TaskRecord,
     },
 };
 
@@ -66,11 +67,46 @@ pub fn migrate(conn: &Connection) -> Result<(), String> {
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS bank_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            label TEXT NOT NULL,
+            iban TEXT NOT NULL,
+            bic TEXT NOT NULL DEFAULT '',
+            bank_name TEXT NOT NULL DEFAULT '',
+            currency TEXT NOT NULL DEFAULT 'EUR',
+            is_default INTEGER NOT NULL DEFAULT 0,
+            notes TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS contracts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            number TEXT NOT NULL DEFAULT '',
+            title TEXT NOT NULL,
+            client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+            project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+            document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+            status TEXT NOT NULL DEFAULT 'Aktivan',
+            signed_date TEXT NOT NULL DEFAULT '',
+            start_date TEXT NOT NULL DEFAULT '',
+            end_date TEXT NOT NULL DEFAULT '',
+            value_cents INTEGER NOT NULL DEFAULT 0,
+            currency TEXT NOT NULL DEFAULT 'EUR',
+            notes TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_tasks_status_due ON tasks(status, due_date);
         CREATE INDEX IF NOT EXISTS idx_activities_happened_at ON activities(happened_at);
         CREATE INDEX IF NOT EXISTS idx_finance_kind_status ON finance_records(kind, status);
         CREATE INDEX IF NOT EXISTS idx_client_contacts_client ON client_contacts(client_id);
         CREATE INDEX IF NOT EXISTS idx_client_contacts_name ON client_contacts(name);
+        CREATE INDEX IF NOT EXISTS idx_bank_accounts_default ON bank_accounts(is_default);
+        CREATE INDEX IF NOT EXISTS idx_contracts_client ON contracts(client_id);
+        CREATE INDEX IF NOT EXISTS idx_contracts_project ON contracts(project_id);
+        CREATE INDEX IF NOT EXISTS idx_contracts_status_end ON contracts(status, end_date);
         "#,
     )
     .map_err(|error| error.to_string())
@@ -197,6 +233,225 @@ pub fn update_client_contact(state: &AppState, contact: ClientContact) -> Result
 pub fn delete_client_contact(state: &AppState, id: i64) -> Result<(), String> {
     let conn = lock(state)?;
     conn.execute("DELETE FROM client_contacts WHERE id=?1", [id])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub fn list_bank_accounts(state: &AppState) -> Result<Vec<BankAccount>, String> {
+    let conn = lock(state)?;
+    let mut stmt = conn
+        .prepare(
+            r#"SELECT id, label, iban, bic, bank_name, currency, is_default, notes,
+                      created_at, updated_at
+               FROM bank_accounts
+               ORDER BY is_default DESC, label COLLATE NOCASE, id DESC"#,
+        )
+        .map_err(|error| error.to_string())?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(BankAccount {
+                id: row.get(0)?,
+                label: row.get(1)?,
+                iban: row.get(2)?,
+                bic: row.get(3)?,
+                bank_name: row.get(4)?,
+                currency: row.get(5)?,
+                is_default: row.get::<_, i64>(6)? != 0,
+                notes: row.get(7)?,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+pub fn create_bank_account(state: &AppState, account: BankAccount) -> Result<i64, String> {
+    if account.label.trim().is_empty() || account.iban.trim().is_empty() {
+        return Err("Naziv računa i IBAN su obavezni.".into());
+    }
+
+    let mut conn = lock(state)?;
+    let tx = conn.transaction().map_err(|error| error.to_string())?;
+    if account.is_default {
+        tx.execute("UPDATE bank_accounts SET is_default=0", [])
+            .map_err(|error| error.to_string())?;
+    }
+    tx.execute(
+        r#"INSERT INTO bank_accounts
+           (label, iban, bic, bank_name, currency, is_default, notes)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
+        params![
+            account.label.trim(),
+            account.iban.trim(),
+            account.bic.trim(),
+            account.bank_name.trim(),
+            account.currency.trim(),
+            if account.is_default { 1 } else { 0 },
+            account.notes
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    let id = tx.last_insert_rowid();
+    tx.commit().map_err(|error| error.to_string())?;
+    Ok(id)
+}
+
+pub fn update_bank_account(state: &AppState, account: BankAccount) -> Result<(), String> {
+    if account.id <= 0 || account.label.trim().is_empty() || account.iban.trim().is_empty() {
+        return Err("Bankovni račun nije valjan.".into());
+    }
+
+    let mut conn = lock(state)?;
+    let tx = conn.transaction().map_err(|error| error.to_string())?;
+    if account.is_default {
+        tx.execute(
+            "UPDATE bank_accounts SET is_default=0 WHERE id<>?1",
+            [account.id],
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    tx.execute(
+        r#"UPDATE bank_accounts
+           SET label=?2, iban=?3, bic=?4, bank_name=?5, currency=?6, is_default=?7,
+               notes=?8, updated_at=CURRENT_TIMESTAMP
+           WHERE id=?1"#,
+        params![
+            account.id,
+            account.label.trim(),
+            account.iban.trim(),
+            account.bic.trim(),
+            account.bank_name.trim(),
+            account.currency.trim(),
+            if account.is_default { 1 } else { 0 },
+            account.notes
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    tx.commit().map_err(|error| error.to_string())
+}
+
+pub fn delete_bank_account(state: &AppState, id: i64) -> Result<(), String> {
+    let conn = lock(state)?;
+    conn.execute("DELETE FROM bank_accounts WHERE id=?1", [id])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub fn list_contracts(state: &AppState) -> Result<Vec<ContractRecord>, String> {
+    let conn = lock(state)?;
+    let mut stmt = conn
+        .prepare(
+            r#"SELECT co.id, co.number, co.title, co.client_id, c.name, co.project_id, p.name,
+                      co.document_id, d.title, co.status, co.signed_date, co.start_date,
+                      co.end_date, co.value_cents, co.currency, co.notes, co.created_at,
+                      co.updated_at
+               FROM contracts co
+               LEFT JOIN clients c ON c.id=co.client_id
+               LEFT JOIN projects p ON p.id=co.project_id
+               LEFT JOIN documents d ON d.id=co.document_id
+               ORDER BY CASE WHEN co.status='Aktivan' THEN 0 ELSE 1 END,
+                        CASE WHEN co.end_date='' THEN 1 ELSE 0 END, co.end_date, co.id DESC"#,
+        )
+        .map_err(|error| error.to_string())?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(ContractRecord {
+                id: row.get(0)?,
+                number: row.get(1)?,
+                title: row.get(2)?,
+                client_id: row.get(3)?,
+                client_name: row.get(4)?,
+                project_id: row.get(5)?,
+                project_name: row.get(6)?,
+                document_id: row.get(7)?,
+                document_title: row.get(8)?,
+                status: row.get(9)?,
+                signed_date: row.get(10)?,
+                start_date: row.get(11)?,
+                end_date: row.get(12)?,
+                value_cents: row.get(13)?,
+                currency: row.get(14)?,
+                notes: row.get(15)?,
+                created_at: row.get(16)?,
+                updated_at: row.get(17)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+pub fn create_contract(state: &AppState, contract: ContractRecord) -> Result<i64, String> {
+    if contract.title.trim().is_empty() {
+        return Err("Naziv ugovora je obavezan.".into());
+    }
+
+    let conn = lock(state)?;
+    conn.execute(
+        r#"INSERT INTO contracts
+           (number, title, client_id, project_id, document_id, status, signed_date,
+            start_date, end_date, value_cents, currency, notes)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"#,
+        params![
+            contract.number.trim(),
+            contract.title.trim(),
+            contract.client_id,
+            contract.project_id,
+            contract.document_id,
+            contract.status.trim(),
+            contract.signed_date.trim(),
+            contract.start_date.trim(),
+            contract.end_date.trim(),
+            contract.value_cents,
+            contract.currency.trim(),
+            contract.notes
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn update_contract(state: &AppState, contract: ContractRecord) -> Result<(), String> {
+    if contract.id <= 0 || contract.title.trim().is_empty() {
+        return Err("Ugovor nije valjan.".into());
+    }
+
+    let conn = lock(state)?;
+    conn.execute(
+        r#"UPDATE contracts
+           SET number=?2, title=?3, client_id=?4, project_id=?5, document_id=?6, status=?7,
+               signed_date=?8, start_date=?9, end_date=?10, value_cents=?11, currency=?12,
+               notes=?13, updated_at=CURRENT_TIMESTAMP
+           WHERE id=?1"#,
+        params![
+            contract.id,
+            contract.number.trim(),
+            contract.title.trim(),
+            contract.client_id,
+            contract.project_id,
+            contract.document_id,
+            contract.status.trim(),
+            contract.signed_date.trim(),
+            contract.start_date.trim(),
+            contract.end_date.trim(),
+            contract.value_cents,
+            contract.currency.trim(),
+            contract.notes
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub fn delete_contract(state: &AppState, id: i64) -> Result<(), String> {
+    let conn = lock(state)?;
+    conn.execute("DELETE FROM contracts WHERE id=?1", [id])
         .map_err(|error| error.to_string())?;
     Ok(())
 }
@@ -520,6 +775,40 @@ pub fn app_info(_state: &AppState) -> AppInfo {
     }
 }
 
+#[derive(Serialize)]
+#[serde(rename = "virelo_export")]
+struct ExportBundle {
+    version: String,
+    company: CompanyProfile,
+    clients: Vec<Client>,
+    contacts: Vec<ClientContact>,
+    bank_accounts: Vec<BankAccount>,
+    contracts: Vec<ContractRecord>,
+    projects: Vec<Project>,
+    notes: Vec<Note>,
+    documents: Vec<DocumentRecord>,
+    tasks: Vec<TaskRecord>,
+    activities: Vec<ActivityRecord>,
+    finance: Vec<FinanceRecord>,
+}
+
+fn build_export_bundle(state: &AppState) -> Result<ExportBundle, String> {
+    Ok(ExportBundle {
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        company: db::get_company_profile(state)?,
+        clients: db::list_clients(state)?,
+        contacts: list_client_contacts(state)?,
+        bank_accounts: list_bank_accounts(state)?,
+        contracts: list_contracts(state)?,
+        projects: db::list_projects(state)?,
+        notes: db::list_notes(state)?,
+        documents: db::list_documents(state)?,
+        tasks: list_tasks(state)?,
+        activities: list_activities(state)?,
+        finance: list_finance_records(state)?,
+    })
+}
+
 pub fn export_workspace_json(state: &AppState, destination: String) -> Result<(), String> {
     let destination = Path::new(&destination);
     if destination.as_os_str().is_empty() {
@@ -532,6 +821,8 @@ pub fn export_workspace_json(state: &AppState, destination: String) -> Result<()
         "company": db::get_company_profile(state)?,
         "clients": db::list_clients(state)?,
         "contacts": list_client_contacts(state)?,
+        "bank_accounts": list_bank_accounts(state)?,
+        "contracts": list_contracts(state)?,
         "projects": db::list_projects(state)?,
         "notes": db::list_notes(state)?,
         "documents": db::list_documents(state)?,
@@ -542,6 +833,29 @@ pub fn export_workspace_json(state: &AppState, destination: String) -> Result<()
 
     let serialized = serde_json::to_string_pretty(&payload).map_err(|error| error.to_string())?;
     fs::write(destination, serialized).map_err(|error| error.to_string())
+}
+
+pub fn export_workspace_yaml(state: &AppState, destination: String) -> Result<(), String> {
+    let destination = Path::new(&destination);
+    if destination.as_os_str().is_empty() {
+        return Err("Odredište nije valjano.".into());
+    }
+
+    let bundle = build_export_bundle(state)?;
+    let serialized = serde_yaml::to_string(&bundle).map_err(|error| error.to_string())?;
+    fs::write(destination, serialized).map_err(|error| error.to_string())
+}
+
+pub fn export_workspace_xml(state: &AppState, destination: String) -> Result<(), String> {
+    let destination = Path::new(&destination);
+    if destination.as_os_str().is_empty() {
+        return Err("Odredište nije valjano.".into());
+    }
+
+    let bundle = build_export_bundle(state)?;
+    let serialized = quick_xml::se::to_string(&bundle).map_err(|error| error.to_string())?;
+    let xml = format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{serialized}");
+    fs::write(destination, xml).map_err(|error| error.to_string())
 }
 
 fn csv_cell(value: &str) -> String {
@@ -603,6 +917,46 @@ pub fn export_workspace_csv(state: &AppState, destination: String) -> Result<(),
                 csv_cell(&contact.email),
                 csv_cell(&contact.phone),
                 csv_cell(&contact.notes),
+            ]
+            .join(","),
+        );
+    }
+
+    for account in list_bank_accounts(state)? {
+        rows.push(
+            [
+                csv_cell("bankovni_racun"),
+                csv_cell(&account.id.to_string()),
+                csv_cell(&account.label),
+                csv_cell(""),
+                csv_cell(if account.is_default { "Zadani" } else { "" }),
+                csv_cell(&account.created_at),
+                csv_cell(""),
+                csv_cell(&account.currency),
+                csv_cell(&account.iban),
+                csv_cell(&account.bank_name),
+                csv_cell(&account.bic),
+                csv_cell(&account.notes),
+            ]
+            .join(","),
+        );
+    }
+
+    for contract in list_contracts(state)? {
+        rows.push(
+            [
+                csv_cell("ugovor"),
+                csv_cell(&contract.id.to_string()),
+                csv_cell(&contract.title),
+                csv_cell(contract.client_name.as_deref().unwrap_or("")),
+                csv_cell(&contract.status),
+                csv_cell(&contract.end_date),
+                csv_cell(&(contract.value_cents as f64 / 100.0).to_string()),
+                csv_cell(&contract.currency),
+                csv_cell(&contract.number),
+                csv_cell(contract.project_name.as_deref().unwrap_or("")),
+                csv_cell(contract.document_title.as_deref().unwrap_or("")),
+                csv_cell(&contract.notes),
             ]
             .join(","),
         );
@@ -741,6 +1095,8 @@ pub fn export_workspace_markdown(state: &AppState, destination: String) -> Resul
     let company = db::get_company_profile(state)?;
     let clients = db::list_clients(state)?;
     let contacts = list_client_contacts(state)?;
+    let bank_accounts = list_bank_accounts(state)?;
+    let contracts = list_contracts(state)?;
     let projects = db::list_projects(state)?;
     let tasks = list_tasks(state)?;
     let notes = db::list_notes(state)?;
@@ -780,6 +1136,35 @@ pub fn export_workspace_markdown(state: &AppState, destination: String) -> Resul
             contact.role,
             contact.email,
             contact.phone
+        ));
+    }
+
+    md.push_str("\n## Bankovni računi\n\n");
+    for account in bank_accounts {
+        md.push_str(&format!(
+            "- **{}** · {} · {} · {}{}\n",
+            account.label,
+            account.iban,
+            account.bank_name,
+            account.currency,
+            if account.is_default { " · zadani" } else { "" }
+        ));
+    }
+
+    md.push_str("\n## Ugovori\n\n");
+    for contract in contracts {
+        md.push_str(&format!(
+            "### {}\n- Broj: {}\n- Klijent: {}\n- Projekt: {}\n- Status: {}\n- Početak: {}\n- Završetak: {}\n- Vrijednost: {:.2} {}\n\n{}\n\n",
+            contract.title,
+            contract.number,
+            contract.client_name.unwrap_or_default(),
+            contract.project_name.unwrap_or_default(),
+            contract.status,
+            contract.start_date,
+            contract.end_date,
+            contract.value_cents as f64 / 100.0,
+            contract.currency,
+            contract.notes
         ));
     }
 
@@ -854,6 +1239,8 @@ pub fn export_workspace_html(state: &AppState, destination: String) -> Result<()
     let company = db::get_company_profile(state)?;
     let clients = db::list_clients(state)?;
     let contacts = list_client_contacts(state)?;
+    let bank_accounts = list_bank_accounts(state)?;
+    let contracts = list_contracts(state)?;
     let projects = db::list_projects(state)?;
     let tasks = list_tasks(state)?;
     let notes = db::list_notes(state)?;
@@ -892,6 +1279,31 @@ pub fn export_workspace_html(state: &AppState, destination: String) -> Result<()
             html_escape(&contact.phone)
         ));
     }
+    html.push_str("</table><h2>Bankovni računi</h2><table><tr><th>Naziv</th><th>IBAN</th><th>Banka</th><th>Valuta</th><th>Zadani</th></tr>");
+    for account in bank_accounts {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+            html_escape(&account.label),
+            html_escape(&account.iban),
+            html_escape(&account.bank_name),
+            html_escape(&account.currency),
+            if account.is_default { "Da" } else { "Ne" }
+        ));
+    }
+
+    html.push_str("</table><h2>Ugovori</h2><table><tr><th>Ugovor</th><th>Klijent</th><th>Status</th><th>Završetak</th><th>Vrijednost</th></tr>");
+    for contract in contracts {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{:.2} {}</td></tr>",
+            html_escape(&contract.title),
+            html_escape(contract.client_name.as_deref().unwrap_or("")),
+            html_escape(&contract.status),
+            html_escape(&contract.end_date),
+            contract.value_cents as f64 / 100.0,
+            html_escape(&contract.currency)
+        ));
+    }
+
     html.push_str("</table><h2>Projekti</h2><table><tr><th>Projekt</th><th>Klijent</th><th>Status</th><th>Rok</th><th>Vrijednost</th></tr>");
     for project in projects {
         html.push_str(&format!(
@@ -1004,6 +1416,14 @@ pub fn global_search(state: &AppState, query: String) -> Result<Vec<SearchHit>, 
             FROM client_contacts cc
             INNER JOIN clients c ON c.id=cc.client_id
             WHERE cc.name LIKE ?1 OR cc.role LIKE ?1 OR cc.email LIKE ?1 OR cc.phone LIKE ?1 OR cc.notes LIKE ?1
+            UNION ALL
+            SELECT 'bank', id, label, iban || ' ' || bank_name || ' ' || currency
+            FROM bank_accounts WHERE label LIKE ?1 OR iban LIKE ?1 OR bic LIKE ?1 OR bank_name LIKE ?1 OR notes LIKE ?1
+            UNION ALL
+            SELECT 'contract', co.id, co.title, co.number || ' ' || co.status || ' ' || COALESCE(c.name, '')
+            FROM contracts co
+            LEFT JOIN clients c ON c.id=co.client_id
+            WHERE co.title LIKE ?1 OR co.number LIKE ?1 OR co.notes LIKE ?1
             UNION ALL
             SELECT 'project', id, name, status || ' ' || COALESCE(due_date, '')
             FROM projects WHERE name LIKE ?1 OR notes LIKE ?1

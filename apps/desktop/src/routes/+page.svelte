@@ -8,9 +8,11 @@
   import type {
     ActivityRecord,
     AppInfo,
+    BankAccount,
     Client,
     ClientContact,
     CompanyProfile,
+    ContractRecord,
     DashboardStats,
     DocumentRecord,
     FinanceRecord,
@@ -58,6 +60,30 @@
     role: '',
     email: '',
     phone: '',
+    notes: ''
+  });
+
+  const emptyBankAccount = () => ({
+    label: '',
+    iban: '',
+    bic: '',
+    bank_name: '',
+    currency: 'EUR',
+    is_default: false,
+    notes: ''
+  });
+
+  const emptyContract = () => ({
+    number: '',
+    title: '',
+    client_id: null as number | null,
+    project_id: null as number | null,
+    document_id: null as number | null,
+    status: 'Aktivan',
+    signed_date: '',
+    start_date: '',
+    end_date: '',
+    currency: 'EUR',
     notes: ''
   });
 
@@ -115,6 +141,8 @@
   let company: CompanyProfile = emptyCompany();
   let clients: Client[] = [];
   let contacts: ClientContact[] = [];
+  let bankAccounts: BankAccount[] = [];
+  let contracts: ContractRecord[] = [];
   let projects: Project[] = [];
   let notes: Note[] = [];
   let documents: DocumentRecord[] = [];
@@ -136,6 +164,13 @@
 
   let contactForm = emptyContact();
   let editingContactId: number | null = null;
+
+  let bankAccountForm = emptyBankAccount();
+  let editingBankAccountId: number | null = null;
+
+  let contractForm = emptyContract();
+  let contractValue = 0;
+  let editingContractId: number | null = null;
 
   let projectForm = emptyProject();
   let projectValue = 0;
@@ -163,6 +198,8 @@
     { id: 'company', label: 'Moja firma', group: 'workspace' },
     { id: 'clients', label: 'Klijenti', group: 'workspace' },
     { id: 'contacts', label: 'Kontakti', group: 'workspace' },
+    { id: 'banking', label: 'Bankovni računi', group: 'workspace' },
+    { id: 'contracts', label: 'Ugovori', group: 'workspace' },
     { id: 'projects', label: 'Projekti', group: 'workspace' },
     { id: 'tasks', label: 'Zadaci', group: 'workspace' },
     { id: 'notes', label: 'Bilješke', group: 'workspace' },
@@ -178,6 +215,8 @@
       company: 'building',
       clients: 'users',
       contacts: 'contact',
+      banking: 'bank',
+      contracts: 'contract',
       projects: 'briefcase',
       tasks: 'check',
       notes: 'note',
@@ -209,6 +248,8 @@
     return ({
       client: 'Klijent',
       contact: 'Kontakt',
+      bank: 'Bankovni račun',
+      contract: 'Ugovor',
       project: 'Projekt',
       task: 'Zadatak',
       note: 'Bilješka',
@@ -254,6 +295,8 @@
       api.company(),
       api.clients(),
       api.contacts(),
+      api.bankAccounts(),
+      api.contracts(),
       api.projects(),
       api.notes(),
       api.documents(),
@@ -263,7 +306,7 @@
       api.info()
     ]);
 
-    [stats, company, clients, contacts, projects, notes, documents, tasks, activities, finance, appInfo] = result;
+    [stats, company, clients, contacts, bankAccounts, contracts, projects, notes, documents, tasks, activities, finance, appInfo] = result;
   }
 
   async function run(action: () => Promise<unknown>, success: string): Promise<boolean> {
@@ -376,6 +419,100 @@
         );
 
     if (ok) resetContactForm();
+  }
+
+  function resetBankAccountForm() {
+    bankAccountForm = emptyBankAccount();
+    editingBankAccountId = null;
+  }
+
+  function editBankAccount(account: BankAccount) {
+    editingBankAccountId = account.id;
+    bankAccountForm = {
+      label: account.label,
+      iban: account.iban,
+      bic: account.bic,
+      bank_name: account.bank_name,
+      currency: account.currency,
+      is_default: account.is_default,
+      notes: account.notes
+    };
+  }
+
+  async function saveBankAccount() {
+    if (!bankAccountForm.label.trim() || !bankAccountForm.iban.trim()) {
+      showMessage('Naziv računa i IBAN su obavezni.', true);
+      return;
+    }
+
+    const ok = editingBankAccountId
+      ? await run(
+          () =>
+            api.updateBankAccount({
+              ...bankAccountForm,
+              id: editingBankAccountId as number,
+              created_at: '',
+              updated_at: ''
+            }),
+          'Bankovni račun je ažuriran.'
+        )
+      : await run(() => api.createBankAccount(bankAccountForm), 'Bankovni račun je dodan.');
+
+    if (ok) resetBankAccountForm();
+  }
+
+  function resetContractForm() {
+    contractForm = emptyContract();
+    contractValue = 0;
+    editingContractId = null;
+  }
+
+  function editContract(contract: ContractRecord) {
+    editingContractId = contract.id;
+    contractValue = contract.value_cents / 100;
+    contractForm = {
+      number: contract.number,
+      title: contract.title,
+      client_id: contract.client_id,
+      project_id: contract.project_id,
+      document_id: contract.document_id,
+      status: contract.status,
+      signed_date: contract.signed_date,
+      start_date: contract.start_date,
+      end_date: contract.end_date,
+      currency: contract.currency,
+      notes: contract.notes
+    };
+  }
+
+  async function saveContract() {
+    if (!contractForm.title.trim()) {
+      showMessage('Naziv ugovora je obavezan.', true);
+      return;
+    }
+
+    const value_cents = Math.round((Number(contractValue) || 0) * 100);
+    const ok = editingContractId
+      ? await run(
+          () =>
+            api.updateContract({
+              ...contractForm,
+              id: editingContractId as number,
+              client_name: null,
+              project_name: null,
+              document_title: null,
+              value_cents,
+              created_at: '',
+              updated_at: ''
+            }),
+          'Ugovor je ažuriran.'
+        )
+      : await run(
+          () => api.createContract({ ...contractForm, value_cents }),
+          'Ugovor je dodan.'
+        );
+
+    if (ok) resetContractForm();
   }
 
   function resetProjectForm() {
@@ -645,6 +782,24 @@
     await run(() => api.exportHtml(destination), 'HTML izvještaj je spremljen.');
   }
 
+  async function exportYaml() {
+    const destination = await save({
+      defaultPath: 'Virelo-podaci.yaml',
+      filters: [{ name: 'YAML', extensions: ['yaml', 'yml'] }]
+    });
+    if (!destination) return;
+    await run(() => api.exportYaml(destination), 'YAML izvoz je spremljen.');
+  }
+
+  async function exportXml() {
+    const destination = await save({
+      defaultPath: 'Virelo-podaci.xml',
+      filters: [{ name: 'XML', extensions: ['xml'] }]
+    });
+    if (!destination) return;
+    await run(() => api.exportXml(destination), 'XML izvoz je spremljen.');
+  }
+
   async function backupDatabase() {
     const destination = await save({
       defaultPath: 'Virelo-sigurnosna-kopija.db',
@@ -662,6 +817,16 @@
   async function removeContact(contact: ClientContact) {
     if (!(await confirmRemoval(`Ukloniti kontakt “${contact.name}”?`))) return;
     await run(() => api.deleteContact(contact.id), 'Kontakt je uklonjen.');
+  }
+
+  async function removeBankAccount(account: BankAccount) {
+    if (!(await confirmRemoval(`Ukloniti bankovni račun “${account.label}”?`))) return;
+    await run(() => api.deleteBankAccount(account.id), 'Bankovni račun je uklonjen.');
+  }
+
+  async function removeContract(contract: ContractRecord) {
+    if (!(await confirmRemoval(`Ukloniti ugovor “${contract.title}”?`))) return;
+    await run(() => api.deleteContract(contract.id), 'Ugovor je uklonjen.');
   }
 
   async function removeProject(project: Project) {
@@ -710,6 +875,8 @@
     const target: Record<string, Section> = {
       client: 'clients',
       contact: 'contacts',
+      bank: 'banking',
+      contract: 'contracts',
       project: 'projects',
       task: 'tasks',
       note: 'notes',
@@ -980,6 +1147,94 @@
           <div class="empty">Još nema kontakt-osoba. Dodaj prvu osobu povezanu s klijentom.</div>
         {/each}
       </div>
+    {:else if section === 'banking'}
+      <div class="page-heading-row">
+        <div>
+          <h1 class="page-title">Bankovni računi</h1>
+          <p class="page-subtitle">Vodi više poslovnih računa, valuta i banaka na jednom mjestu.</p>
+        </div>
+        <span class="heading-badge"><Icon name="bank" size={15} /> {bankAccounts.length} računa</span>
+      </div>
+
+      <div class="card form-grid">
+        <label>Naziv računa<input class="field" bind:value={bankAccountForm.label} placeholder="Glavni račun" /></label>
+        <label>IBAN<input class="field" bind:value={bankAccountForm.iban} /></label>
+        <label>SWIFT / BIC<input class="field" bind:value={bankAccountForm.bic} /></label>
+        <label>Banka<input class="field" bind:value={bankAccountForm.bank_name} /></label>
+        <label>Valuta<select class="field" bind:value={bankAccountForm.currency}><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></label>
+        <label class="toggle-label"><input type="checkbox" bind:checked={bankAccountForm.is_default} /> Zadani račun</label>
+        <label class="wide">Bilješke<textarea class="field" bind:value={bankAccountForm.notes}></textarea></label>
+        <div class="wide form-actions">
+          <button class="button primary" disabled={busy} onclick={saveBankAccount}><Icon name="bank" size={15} /> {editingBankAccountId ? 'Spremi izmjene' : 'Dodaj račun'}</button>
+          {#if editingBankAccountId}<button class="button" onclick={resetBankAccountForm}>Odustani</button>{/if}
+        </div>
+      </div>
+
+      <div class="list section-list">
+        {#each bankAccounts as account}
+          <div class="list-item">
+            <div class="item-icon"><Icon name="bank" size={18} /></div>
+            <div>
+              <h3>{account.label} {#if account.is_default}<span class="chip">Zadani</span>{/if}</h3>
+              <p>{account.iban} · {account.bank_name || 'Banka nije navedena'} · {account.currency}</p>
+            </div>
+            <div class="row-actions">
+              <button class="button" onclick={() => editBankAccount(account)}><Icon name="edit" size={14} /> Uredi</button>
+              <button class="button danger" onclick={() => removeBankAccount(account)}><Icon name="trash" size={14} /> Ukloni</button>
+            </div>
+          </div>
+        {:else}
+          <div class="empty">Još nema dodatnih bankovnih računa.</div>
+        {/each}
+      </div>
+
+    {:else if section === 'contracts'}
+      <div class="page-heading-row">
+        <div>
+          <h1 class="page-title">Ugovori</h1>
+          <p class="page-subtitle">Ugovori, rokovi, vrijednosti i povezani dokumenti bez traženja po mapama.</p>
+        </div>
+        <span class="heading-badge"><Icon name="contract" size={15} /> {contracts.length} ugovora</span>
+      </div>
+
+      <div class="card form-grid">
+        <label>Broj / oznaka<input class="field" bind:value={contractForm.number} /></label>
+        <label>Status<select class="field" bind:value={contractForm.status}><option>Aktivan</option><option>Nacrt</option><option>Na čekanju</option><option>Istječe</option><option>Završen</option><option>Otkazan</option></select></label>
+        <label class="wide">Naziv ugovora<input class="field" bind:value={contractForm.title} /></label>
+        <label>Klijent<select class="field" bind:value={contractForm.client_id}><option value={null}>Bez klijenta</option>{#each clients as client}<option value={client.id}>{client.name}</option>{/each}</select></label>
+        <label>Projekt<select class="field" bind:value={contractForm.project_id}><option value={null}>Bez projekta</option>{#each projects as project}<option value={project.id}>{project.name}</option>{/each}</select></label>
+        <label>Dokument<select class="field" bind:value={contractForm.document_id}><option value={null}>Bez dokumenta</option>{#each documents as document}<option value={document.id}>{document.title}</option>{/each}</select></label>
+        <label>Potpisan<input class="field" type="date" bind:value={contractForm.signed_date} /></label>
+        <label>Početak<input class="field" type="date" bind:value={contractForm.start_date} /></label>
+        <label>Završetak<input class="field" type="date" bind:value={contractForm.end_date} /></label>
+        <label>Vrijednost ({contractForm.currency})<input class="field" type="number" min="0" step="0.01" bind:value={contractValue} /></label>
+        <label>Valuta<select class="field" bind:value={contractForm.currency}><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></label>
+        <label class="wide">Bilješke<textarea class="field" bind:value={contractForm.notes}></textarea></label>
+        <div class="wide form-actions">
+          <button class="button primary" disabled={busy} onclick={saveContract}><Icon name="contract" size={15} /> {editingContractId ? 'Spremi izmjene' : 'Dodaj ugovor'}</button>
+          {#if editingContractId}<button class="button" onclick={resetContractForm}>Odustani</button>{/if}
+        </div>
+      </div>
+
+      <div class="list section-list">
+        {#each contracts as contract}
+          <div class="list-item">
+            <div class="item-icon"><Icon name="contract" size={18} /></div>
+            <div>
+              <h3>{contract.title}</h3>
+              <p>{contract.number || 'Bez oznake'} · {contract.status} · {contract.client_name || 'bez klijenta'} · {contract.end_date ? `do ${formatDate(contract.end_date)}` : 'bez roka'} · {money(contract.value_cents, contract.currency)}</p>
+              {#if contract.document_title}<p class="item-secondary">Dokument: {contract.document_title}</p>{/if}
+            </div>
+            <div class="row-actions">
+              <button class="button" onclick={() => editContract(contract)}><Icon name="edit" size={14} /> Uredi</button>
+              <button class="button danger" onclick={() => removeContract(contract)}><Icon name="trash" size={14} /> Ukloni</button>
+            </div>
+          </div>
+        {:else}
+          <div class="empty">Još nema ugovora.</div>
+        {/each}
+      </div>
+
     {:else if section === 'projects'}
       <h1 class="page-title">Projekti</h1>
       <p class="page-subtitle">Status, rok, prioritet, vrijednost i povezanost s klijentom.</p>
@@ -1211,6 +1466,18 @@
           <h2>HTML izvještaj</h2>
           <p class="muted">Samostalni izvještaj koji se otvara u svakom modernom pregledniku.</p>
           <button class="button" disabled={busy} onclick={exportHtml}><Icon name="export" size={15} />Izvezi HTML</button>
+        </section>
+        <section class="card export-card">
+          <div class="export-icon"><Icon name="file" size={20} /></div>
+          <h2>YAML</h2>
+          <p class="muted">Čitljiv strukturirani format za prijenos, konfiguracije i automatizaciju.</p>
+          <button class="button" disabled={busy} onclick={exportYaml}><Icon name="export" size={15} />Izvezi YAML</button>
+        </section>
+        <section class="card export-card">
+          <div class="export-icon"><Icon name="file" size={20} /></div>
+          <h2>XML</h2>
+          <p class="muted">Standardni razmjenski format za druge poslovne sustave i arhivu.</p>
+          <button class="button" disabled={busy} onclick={exportXml}><Icon name="export" size={15} />Izvezi XML</button>
         </section>
       </div>
 

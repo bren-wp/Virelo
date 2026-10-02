@@ -3,6 +3,8 @@ export type Section =
   | 'company'
   | 'clients'
   | 'contacts'
+  | 'banking'
+  | 'contracts'
   | 'projects'
   | 'tasks'
   | 'notes'
@@ -59,6 +61,40 @@ export interface ClientContact {
   role: string;
   email: string;
   phone: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BankAccount {
+  id: number;
+  label: string;
+  iban: string;
+  bic: string;
+  bank_name: string;
+  currency: string;
+  is_default: boolean;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContractRecord {
+  id: number;
+  number: string;
+  title: string;
+  client_id: number | null;
+  client_name: string | null;
+  project_id: number | null;
+  project_name: string | null;
+  document_id: number | null;
+  document_title: string | null;
+  status: string;
+  signed_date: string;
+  start_date: string;
+  end_date: string;
+  value_cents: number;
+  currency: string;
   notes: string;
   created_at: string;
   updated_at: string;

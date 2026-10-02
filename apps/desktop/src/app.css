@@ -998,3 +998,31 @@ textarea.note-editor {
     min-height: 0;
   }
 }
+
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.toggle-label input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.section-list {
+  margin-top: 14px;
+}
+
+.item-secondary {
+  margin-top: 4px !important;
+  color: var(--text-soft) !important;
+}
