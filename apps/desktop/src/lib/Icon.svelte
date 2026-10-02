@@ -69,6 +69,24 @@
   {:else if name === 'export'}
     <path d="M12 3v12M7 8l5-5 5 5" />
     <path d="M5 13v7h14v-7" />
+  {:else if name === 'archive'}
+    <rect x="3" y="4" width="18" height="5" rx="1" />
+    <path d="M5 9v11h14V9M10 13h4" />
+  {:else if name === 'alert'}
+    <path d="M12 3 2.8 20h18.4z" />
+    <path d="M12 9v5M12 17h.01" />
+  {:else if name === 'clock'}
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  {:else if name === 'invoice'}
+    <path d="M6 2h12v20l-3-2-3 2-3-2-3 2z" />
+    <path d="M9 7h6M9 11h6M9 15h4" />
+  {:else if name === 'save'}
+    <path d="M5 3h12l2 2v16H5z" />
+    <path d="M8 3v6h8V3M8 17h8" />
+  {:else if name === 'upload'}
+    <path d="M12 16V4M7 9l5-5 5 5" />
+    <path d="M4 16v4h16v-4" />
   {:else if name === 'calendar'}
     <rect x="3" y="5" width="18" height="16" rx="2" />
     <path d="M16 3v4M8 3v4M3 10h18" />
