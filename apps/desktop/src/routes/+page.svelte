@@ -782,6 +782,24 @@
     await run(() => api.exportHtml(destination), 'HTML izvještaj je spremljen.');
   }
 
+  async function exportYaml() {
+    const destination = await save({
+      defaultPath: 'Virelo-podaci.yaml',
+      filters: [{ name: 'YAML', extensions: ['yaml', 'yml'] }]
+    });
+    if (!destination) return;
+    await run(() => api.exportYaml(destination), 'YAML izvoz je spremljen.');
+  }
+
+  async function exportXml() {
+    const destination = await save({
+      defaultPath: 'Virelo-podaci.xml',
+      filters: [{ name: 'XML', extensions: ['xml'] }]
+    });
+    if (!destination) return;
+    await run(() => api.exportXml(destination), 'XML izvoz je spremljen.');
+  }
+
   async function backupDatabase() {
     const destination = await save({
       defaultPath: 'Virelo-sigurnosna-kopija.db',
@@ -1448,6 +1466,18 @@
           <h2>HTML izvještaj</h2>
           <p class="muted">Samostalni izvještaj koji se otvara u svakom modernom pregledniku.</p>
           <button class="button" disabled={busy} onclick={exportHtml}><Icon name="export" size={15} />Izvezi HTML</button>
+        </section>
+        <section class="card export-card">
+          <div class="export-icon"><Icon name="file" size={20} /></div>
+          <h2>YAML</h2>
+          <p class="muted">Čitljiv strukturirani format za prijenos, konfiguracije i automatizaciju.</p>
+          <button class="button" disabled={busy} onclick={exportYaml}><Icon name="export" size={15} />Izvezi YAML</button>
+        </section>
+        <section class="card export-card">
+          <div class="export-icon"><Icon name="file" size={20} /></div>
+          <h2>XML</h2>
+          <p class="muted">Standardni razmjenski format za druge poslovne sustave i arhivu.</p>
+          <button class="button" disabled={busy} onclick={exportXml}><Icon name="export" size={15} />Izvezi XML</button>
         </section>
       </div>
 
