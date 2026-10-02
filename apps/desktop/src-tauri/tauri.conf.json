@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Virelo",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "identifier": "com.virelo.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -14,12 +14,18 @@
       {
         "label": "main",
         "title": "Virelo",
-        "width": 1320,
-        "height": 840,
-        "minWidth": 760,
-        "minHeight": 540,
+        "width": 1160,
+        "height": 700,
+        "minWidth": 720,
+        "minHeight": 520,
+        "maxWidth": 1680,
+        "maxHeight": 1050,
         "resizable": true,
+        "maximizable": true,
+        "maximized": false,
         "fullscreen": false,
+        "decorations": true,
+        "shadow": true,
         "center": true
       }
     ],
@@ -32,8 +38,8 @@
     "targets": ["nsis"],
     "icon": ["icons/icon.png", "icons/icon.ico"],
     "category": "Business",
-    "shortDescription": "Local-first business workspace",
-    "longDescription": "Virelo is a private local-first workspace for company data, clients, projects, tasks, notes, documents, activities and finance.",
+    "shortDescription": "Business workspace",
+    "longDescription": "Virelo organizes company data, clients, projects, tasks, notes, documents, activities and finance in one desktop application.",
     "windows": {
       "nsis": {
         "installerIcon": "icons/icon.ico",
