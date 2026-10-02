@@ -70,6 +70,19 @@ jobs:
             }
           }
 
+      - name: Verify GUI subsystem
+        shell: pwsh
+        run: |
+          $file = "artifacts/Virelo-Portable.exe"
+          $bytes = [System.IO.File]::ReadAllBytes($file)
+          $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+          $optionalHeader = $peOffset + 24
+          $subsystem = [BitConverter]::ToUInt16($bytes, $optionalHeader + 68)
+          if ($subsystem -ne 2) {
+            throw "Virelo Portable is not a Windows GUI subsystem executable. Subsystem=$subsystem"
+          }
+          Write-Host "Windows GUI subsystem verified. No console window should be created."
+
       - name: Portable EXE launch smoke test
         shell: pwsh
         run: |
@@ -84,22 +97,22 @@ jobs:
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Virelo-Windows-1.1.0
+          name: Virelo-Windows-1.2.0
           path: |
             artifacts/Virelo-Portable.exe
             artifacts/Virelo-Setup.exe
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish v1.1.0 GitHub Release
+      - name: Publish v1.2.0 GitHub Release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "v1.1.0"
+          $tag = "v1.2.0"
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --target "${{ github.sha }}" --title "Virelo v1.1.0" --notes "Produkcijsko izdanje s poboljšanim responzivnim sučeljem, sistemskim dijalozima, čišćim korisničkim tekstovima i dodatnim QA provjerama. Sadrži Setup i Portable EXE."
+            gh release create $tag --target "${{ github.sha }}" --title "Virelo v1.2.0" --notes "Virelo 1.2 uklanja Windows konzolni prozor, dodaje novi Virelo vizualni identitet i ikonografiju, kontakt-osobe klijenata te JSON, CSV, Markdown i HTML izvoz. Sadrži provjereni Setup i Portable EXE."
           }
           gh release upload $tag "artifacts/Virelo-Portable.exe" "artifacts/Virelo-Setup.exe" --clobber
