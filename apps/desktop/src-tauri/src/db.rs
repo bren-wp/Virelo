@@ -549,3 +549,188 @@ pub fn global_search(state: &AppState, query: String) -> Result<Vec<SearchHit>, 
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        extras,
+        models::{ActivityRecord, FinanceRecord, Note, Project, TaskRecord},
+    };
+
+    fn test_state() -> AppState {
+        let conn = Connection::open_in_memory().expect("in-memory database");
+        configure_database(&conn).expect("database pragmas");
+        migrate(&conn).expect("core migrations");
+        extras::migrate(&conn).expect("extended migrations");
+
+        let data_dir = std::env::temp_dir().join(format!("virelo-test-{}", Uuid::new_v4()));
+        let documents_dir = data_dir.join("documents");
+        fs::create_dir_all(&documents_dir).expect("test documents directory");
+
+        AppState {
+            conn: Mutex::new(conn),
+            database_path: data_dir.join("virelo-test.sqlite3"),
+            data_dir,
+            documents_dir,
+        }
+    }
+
+    #[test]
+    fn production_crud_flow_works() {
+        let state = test_state();
+
+        let client_id = create_client(
+            &state,
+            Client {
+                id: 0,
+                name: "Test klijent".into(),
+                tax_id: "12345678901".into(),
+                registration_id: String::new(),
+                email: "test@example.com".into(),
+                phone: String::new(),
+                website: String::new(),
+                address: String::new(),
+                city: "Rijeka".into(),
+                country: "Hrvatska".into(),
+                status: "Aktivan".into(),
+                notes: "Važna napomena".into(),
+                created_at: String::new(),
+            },
+        )
+        .expect("create client");
+
+        let project_id = create_project(
+            &state,
+            Project {
+                id: 0,
+                client_id: Some(client_id),
+                client_name: None,
+                name: "Virelo QA projekt".into(),
+                status: "Aktivan".into(),
+                priority: "Visok".into(),
+                due_date: "2026-12-31".into(),
+                value_cents: 125_000,
+                currency: "EUR".into(),
+                notes: "Test projekta".into(),
+                created_at: String::new(),
+            },
+        )
+        .expect("create project");
+
+        create_note(
+            &state,
+            Note {
+                id: 0,
+                title: "Sastanak".into(),
+                body_markdown: "Dogovoreni sljedeći koraci.".into(),
+                client_id: Some(client_id),
+                project_id: Some(project_id),
+                tags: "sastanak".into(),
+                updated_at: String::new(),
+            },
+        )
+        .expect("create note");
+
+        extras::create_task(
+            &state,
+            TaskRecord {
+                id: 0,
+                title: "Pripremi ponudu".into(),
+                client_id: Some(client_id),
+                client_name: None,
+                project_id: Some(project_id),
+                project_name: None,
+                status: "Otvoren".into(),
+                priority: "Visok".into(),
+                due_date: "2026-12-15".into(),
+                notes: "Test zadatka".into(),
+                created_at: String::new(),
+                updated_at: String::new(),
+            },
+        )
+        .expect("create task");
+
+        extras::create_activity(
+            &state,
+            ActivityRecord {
+                id: 0,
+                kind: "Poziv".into(),
+                title: "Poziv klijentu".into(),
+                details: "Potvrđeni detalji projekta.".into(),
+                client_id: Some(client_id),
+                client_name: None,
+                project_id: Some(project_id),
+                project_name: None,
+                happened_at: "2026-10-02T12:00".into(),
+                created_at: String::new(),
+            },
+        )
+        .expect("create activity");
+
+        extras::create_finance_record(
+            &state,
+            FinanceRecord {
+                id: 0,
+                kind: "Ponuda".into(),
+                number: "P-001".into(),
+                title: "Ponuda za projekt".into(),
+                client_id: Some(client_id),
+                client_name: None,
+                amount_cents: 125_000,
+                currency: "EUR".into(),
+                status: "Nacrt".into(),
+                issue_date: "2026-10-02".into(),
+                due_date: "2026-10-15".into(),
+                notes: String::new(),
+                created_at: String::new(),
+                updated_at: String::new(),
+            },
+        )
+        .expect("create finance record");
+
+        let source = state.data_dir.join("virelo-test-document.txt");
+        fs::write(&source, b"Virelo QA").expect("write source document");
+        import_document(
+            &state,
+            source.to_string_lossy().into_owned(),
+            "QA dokument".into(),
+            Some(client_id),
+            Some(project_id),
+        )
+        .expect("import document");
+
+        assert_eq!(list_clients(&state).expect("list clients").len(), 1);
+        assert_eq!(list_projects(&state).expect("list projects").len(), 1);
+        assert_eq!(list_notes(&state).expect("list notes").len(), 1);
+        assert_eq!(list_documents(&state).expect("list documents").len(), 1);
+        assert_eq!(extras::list_tasks(&state).expect("list tasks").len(), 1);
+        assert_eq!(
+            extras::list_activities(&state)
+                .expect("list activities")
+                .len(),
+            1
+        );
+        assert_eq!(
+            extras::list_finance_records(&state)
+                .expect("list finance")
+                .len(),
+            1
+        );
+
+        let search =
+            extras::global_search(&state, "Virelo QA".into()).expect("global search");
+        assert!(search.iter().any(|hit| hit.kind == "project"));
+
+        let stats = dashboard_stats(&state).expect("dashboard stats");
+        assert_eq!(stats.clients, 1);
+        assert_eq!(stats.active_projects, 1);
+        assert_eq!(stats.notes, 1);
+        assert_eq!(stats.documents, 1);
+
+        let data_dir = state.data_dir.clone();
+        drop(state);
+        let _ = fs::remove_dir_all(data_dir);
+    }
+}
