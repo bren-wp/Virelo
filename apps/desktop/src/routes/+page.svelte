@@ -152,7 +152,7 @@
     { id: 'documents', label: 'Dokumenti', group: 'workspace' },
     { id: 'activities', label: 'Aktivnosti', group: 'workspace' },
     { id: 'finance', label: 'Financije', group: 'workspace' },
-    { id: 'settings', label: 'Backup i podaci', group: 'tools' }
+    { id: 'settings', label: 'Sigurnosna kopija', group: 'tools' }
   ];
 
   function showMessage(text: string, error = false) {
@@ -186,11 +186,23 @@
 
   function formatDate(value: string) {
     if (!value) return '—';
-    const normalized = value.includes('T') ? value : value.replace(' ', 'T') + 'Z';
+
+    const hasTime = value.includes(':');
+    let normalized = value;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      normalized = `${value}T00:00:00`;
+    } else if (value.includes(' ') && !value.endsWith('Z')) {
+      normalized = `${value.replace(' ', 'T')}Z`;
+    }
+
     const date = new Date(normalized);
-    return Number.isNaN(date.getTime())
-      ? value
-      : new Intl.DateTimeFormat('hr-HR', { dateStyle: 'medium', timeStyle: value.includes(':') ? 'short' : undefined }).format(date);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return new Intl.DateTimeFormat(
+      'hr-HR',
+      hasTime ? { dateStyle: 'medium', timeStyle: 'short' } : { dateStyle: 'medium' }
+    ).format(date);
   }
 
   async function confirmRemoval(messageText: string) {
@@ -603,18 +615,15 @@
     }
   }
 
-  onMount(async () => {
-    try {
-      await refresh();
-    } catch (error) {
-      showMessage(friendlyError(error), true);
-    }
+  onMount(() => {
+    void refresh().catch((error) => showMessage(friendlyError(error), true));
 
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         searchInput?.focus();
       }
+
       if (event.key === 'Escape') {
         sidebarOpen = false;
         searchQuery = '';
