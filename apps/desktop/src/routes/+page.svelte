@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { open, save } from '@tauri-apps/plugin-dialog';
+  import { confirm, open, save } from '@tauri-apps/plugin-dialog';
   import { openPath } from '@tauri-apps/plugin-opener';
   import { api } from '$lib/api';
   import type {
@@ -115,6 +115,8 @@
   let busy = false;
   let message = '';
   let messageError = false;
+  let sidebarOpen = false;
+  let searchInput: HTMLInputElement;
 
   let clientForm = emptyClient();
   let editingClientId: number | null = null;
@@ -158,6 +160,48 @@
     messageError = error;
   }
 
+  function navigate(target: Section) {
+    section = target;
+    sidebarOpen = false;
+    searchQuery = '';
+    searchResults = [];
+  }
+
+  function friendlyError(error: unknown) {
+    const raw = String(error ?? '');
+    return raw.replace(/^Error:\s*/i, '').trim() || 'Radnju nije moguće izvršiti.';
+  }
+
+  function kindLabel(kind: string) {
+    return ({
+      client: 'Klijent',
+      project: 'Projekt',
+      task: 'Zadatak',
+      note: 'Bilješka',
+      document: 'Dokument',
+      activity: 'Aktivnost',
+      finance: 'Financije'
+    } as Record<string, string>)[kind] ?? kind;
+  }
+
+  function formatDate(value: string) {
+    if (!value) return '—';
+    const normalized = value.includes('T') ? value : value.replace(' ', 'T') + 'Z';
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime())
+      ? value
+      : new Intl.DateTimeFormat('hr-HR', { dateStyle: 'medium', timeStyle: value.includes(':') ? 'short' : undefined }).format(date);
+  }
+
+  async function confirmRemoval(messageText: string) {
+    return confirm(messageText, {
+      title: 'Virelo',
+      kind: 'warning',
+      okLabel: 'Ukloni',
+      cancelLabel: 'Odustani'
+    });
+  }
+
   async function refresh() {
     const result = await Promise.all([
       api.dashboard(),
@@ -185,7 +229,7 @@
       showMessage(success);
       return true;
     } catch (error) {
-      showMessage(String(error), true);
+      showMessage(friendlyError(error), true);
       return false;
     } finally {
       busy = false;
@@ -466,7 +510,7 @@
     try {
       await openPath(document.file_path);
     } catch (error) {
-      showMessage(String(error), true);
+      showMessage(friendlyError(error), true);
     }
   }
 
@@ -486,6 +530,41 @@
     });
     if (!destination) return;
     await run(() => api.backupDatabase(destination), 'SQLite backup je spremljen.');
+  }
+
+  async function removeClient(client: Client) {
+    if (!(await confirmRemoval(`Ukloniti klijenta “${client.name}”? Povezani projekti i zapisi neće se automatski izbrisati.`))) return;
+    await run(() => api.deleteClient(client.id), 'Klijent je uklonjen.');
+  }
+
+  async function removeProject(project: Project) {
+    if (!(await confirmRemoval(`Ukloniti projekt “${project.name}”?`))) return;
+    await run(() => api.deleteProject(project.id), 'Projekt je uklonjen.');
+  }
+
+  async function removeTask(task: TaskRecord) {
+    if (!(await confirmRemoval(`Ukloniti zadatak “${task.title}”?`))) return;
+    await run(() => api.deleteTask(task.id), 'Zadatak je uklonjen.');
+  }
+
+  async function removeNote(note: Note) {
+    if (!(await confirmRemoval(`Ukloniti bilješku “${note.title}”?`))) return;
+    await run(() => api.deleteNote(note.id), 'Bilješka je uklonjena.');
+  }
+
+  async function removeDocument(document: DocumentRecord) {
+    if (!(await confirmRemoval(`Ukloniti dokument “${document.title}”? Datoteka spremljena kroz Virelo također će biti uklonjena.`))) return;
+    await run(() => api.deleteDocument(document.id), 'Dokument je uklonjen.');
+  }
+
+  async function removeActivity(activity: ActivityRecord) {
+    if (!(await confirmRemoval(`Ukloniti aktivnost “${activity.title}”?`))) return;
+    await run(() => api.deleteActivity(activity.id), 'Aktivnost je uklonjena.');
+  }
+
+  async function removeFinance(record: FinanceRecord) {
+    if (!(await confirmRemoval(`Ukloniti zapis “${record.title}”?`))) return;
+    await run(() => api.deleteFinance(record.id), 'Financijski zapis je uklonjen.');
   }
 
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -510,9 +589,7 @@
       activity: 'activities',
       finance: 'finance'
     };
-    section = target[hit.kind] ?? 'dashboard';
-    searchQuery = '';
-    searchResults = [];
+    navigate(target[hit.kind] ?? 'dashboard');
   }
 
   function money(cents: number, currency = 'EUR') {
@@ -530,52 +607,70 @@
     try {
       await refresh();
     } catch (error) {
-      showMessage(String(error), true);
+      showMessage(friendlyError(error), true);
     }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        searchInput?.focus();
+      }
+      if (event.key === 'Escape') {
+        sidebarOpen = false;
+        searchQuery = '';
+        searchResults = [];
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   });
 </script>
 
 <svelte:head>
   <title>Virelo</title>
-  <meta name="description" content="Virelo local-first poslovni workspace" />
+  <meta name="description" content="Virelo poslovni sustav" />
 </svelte:head>
 
-<div class="app-shell">
+<div class:sidebar-open={sidebarOpen} class="app-shell">
+  {#if sidebarOpen}<button class="sidebar-scrim" aria-label="Zatvori navigaciju" onclick={() => (sidebarOpen = false)}></button>{/if}
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-mark">V</div>
       <div>
         <strong>Virelo</strong>
-        <span>Business Workspace</span>
+        <span>Poslovni sustav</span>
       </div>
     </div>
 
-    <div class="nav-label">Workspace</div>
+    <div class="nav-label">Poslovanje</div>
     {#each nav.filter((item) => item.group === 'workspace') as item}
-      <button class:active={section === item.id} class="nav-button" onclick={() => (section = item.id)}>
+      <button class:active={section === item.id} class="nav-button" onclick={() => navigate(item.id)}>
         {item.label}
       </button>
     {/each}
 
     <div class="nav-label">Alati</div>
     {#each nav.filter((item) => item.group === 'tools') as item}
-      <button class:active={section === item.id} class="nav-button" onclick={() => (section = item.id)}>
+      <button class:active={section === item.id} class="nav-button" onclick={() => navigate(item.id)}>
         {item.label}
       </button>
     {/each}
 
     <div class="sidebar-footer">
       <strong>Virelo {appInfo ? `v${appInfo.version}` : ''}</strong>
-      <span>Local-first · bez telemetrije</span>
+      <span>Poslovanje bez suvišnih koraka</span>
     </div>
   </aside>
 
   <main class="main">
     <div class="topbar">
+      <button class="menu-button" aria-label="Otvori navigaciju" onclick={() => (sidebarOpen = true)}>☰</button>
       <div class="search-wrap">
         <input
           class="search-input"
-          placeholder="Pretraži cijeli workspace…"
+          placeholder="Pretraži Virelo…"
+          bind:this={searchInput}
           bind:value={searchQuery}
           oninput={queueSearch}
         />
@@ -584,13 +679,13 @@
             {#each searchResults as hit}
               <button class="search-result" onclick={() => openSearchHit(hit)}>
                 <strong>{hit.title}</strong>
-                <small>{hit.kind} · {hit.subtitle}</small>
+                <small>{kindLabel(hit.kind)} · {hit.subtitle}</small>
               </button>
             {/each}
           </div>
         {/if}
       </div>
-      <span class="local-badge">● Lokalni podaci</span>
+      <button class="quick-action" onclick={() => navigate('tasks')}>Novi zadatak</button>
     </div>
 
     {#if message}
@@ -599,20 +694,20 @@
 
     {#if section === 'dashboard'}
       <h1 class="page-title">Pregled</h1>
-      <p class="page-subtitle">Brzi pregled poslovnog workspacea i otvorenih obaveza.</p>
+      <p class="page-subtitle">Najvažnije informacije, rokovi i obaveze na jednom mjestu.</p>
 
       <div class="stats-grid">
-        <button class="card stat-card" onclick={() => (section = 'clients')}>
+        <button class="card stat-card" onclick={() => navigate('clients')}>
           <div class="stat-value">{stats.clients}</div><div class="muted">Klijenti</div>
         </button>
-        <button class="card stat-card" onclick={() => (section = 'projects')}>
+        <button class="card stat-card" onclick={() => navigate('projects')}>
           <div class="stat-value">{stats.active_projects}</div><div class="muted">Aktivni projekti</div>
         </button>
-        <button class="card stat-card" onclick={() => (section = 'tasks')}>
+        <button class="card stat-card" onclick={() => navigate('tasks')}>
           <div class="stat-value">{tasks.filter((task) => task.status !== 'Završen').length}</div>
           <div class="muted">Otvoreni zadaci</div>
         </button>
-        <button class="card stat-card" onclick={() => (section = 'documents')}>
+        <button class="card stat-card" onclick={() => navigate('documents')}>
           <div class="stat-value">{stats.documents}</div><div class="muted">Dokumenti</div>
         </button>
       </div>
@@ -621,7 +716,7 @@
         <section class="card">
           <div class="section-heading">
             <div><strong>Sljedeći zadaci</strong><span>Prioriteti i rokovi</span></div>
-            <button class="text-button" onclick={() => (section = 'tasks')}>Svi zadaci</button>
+            <button class="text-button" onclick={() => navigate('tasks')}>Svi zadaci</button>
           </div>
           <div class="compact-list">
             {#each tasks.filter((task) => task.status !== 'Završen').slice(0, 5) as task}
@@ -638,13 +733,13 @@
         <section class="card">
           <div class="section-heading">
             <div><strong>Nedavne aktivnosti</strong><span>Zadnji zapisi</span></div>
-            <button class="text-button" onclick={() => (section = 'activities')}>Sve aktivnosti</button>
+            <button class="text-button" onclick={() => navigate('activities')}>Sve aktivnosti</button>
           </div>
           <div class="compact-list">
             {#each activities.slice(0, 5) as activity}
               <div>
                 <strong>{activity.title}</strong>
-                <span>{activity.kind} · {activity.happened_at || activity.created_at}</span>
+                <span>{activity.kind} · {formatDate(activity.happened_at || activity.created_at)}</span>
               </div>
             {:else}
               <div class="empty compact">Još nema aktivnosti.</div>
@@ -654,7 +749,7 @@
       </div>
     {:else if section === 'company'}
       <h1 class="page-title">Moja firma</h1>
-      <p class="page-subtitle">Identifikacijski, kontaktni i bankovni podaci dostupni bez interneta.</p>
+      <p class="page-subtitle">Identifikacijski, kontaktni i bankovni podaci tvrtke.</p>
       <div class="card form-grid">
         <label>Naziv<input class="field" bind:value={company.name} /></label>
         <label>OIB / PIB / DIČ<input class="field" bind:value={company.tax_id} /></label>
@@ -703,7 +798,7 @@
             </div>
             <div class="row-actions">
               <button class="button" onclick={() => editClient(client)}>Uredi</button>
-              <button class="button danger" onclick={() => run(() => api.deleteClient(client.id), 'Klijent je uklonjen.')}>Ukloni</button>
+              <button class="button danger" onclick={() => removeClient(client)}>Ukloni</button>
             </div>
           </div>
         {:else}
@@ -739,7 +834,7 @@
             <div class="row-actions">
               <span class="chip">{project.priority}</span>
               <button class="button" onclick={() => editProject(project)}>Uredi</button>
-              <button class="button danger" onclick={() => run(() => api.deleteProject(project.id), 'Projekt je uklonjen.')}>Ukloni</button>
+              <button class="button danger" onclick={() => removeProject(project)}>Ukloni</button>
             </div>
           </div>
         {:else}
@@ -773,7 +868,7 @@
             <div class="row-actions">
               <span class="chip">{task.priority}</span>
               <button class="button" onclick={() => editTask(task)}>Uredi</button>
-              <button class="button danger" onclick={() => run(() => api.deleteTask(task.id), 'Zadatak je uklonjen.')}>Ukloni</button>
+              <button class="button danger" onclick={() => removeTask(task)}>Ukloni</button>
             </div>
           </div>
         {:else}
@@ -798,10 +893,10 @@
       <div class="list">
         {#each notes as note}
           <div class="list-item">
-            <div><h3>{note.title}</h3><p>{note.tags || 'bez tagova'} · {note.updated_at}</p></div>
+            <div><h3>{note.title}</h3><p>{note.tags || 'bez tagova'} · {formatDate(note.updated_at)}</p></div>
             <div class="row-actions">
               <button class="button" onclick={() => editNote(note)}>Uredi</button>
-              <button class="button danger" onclick={() => run(() => api.deleteNote(note.id), 'Bilješka je uklonjena.')}>Ukloni</button>
+              <button class="button danger" onclick={() => removeNote(note)}>Ukloni</button>
             </div>
           </div>
         {:else}
@@ -810,7 +905,7 @@
       </div>
     {:else if section === 'documents'}
       <h1 class="page-title">Dokumenti</h1>
-      <p class="page-subtitle">Uvezeni dokumenti ostaju u lokalnom Virelo data direktoriju.</p>
+      <p class="page-subtitle">Dokumenti povezani s klijentima i projektima.</p>
 
       <div class="card form-grid compact-form">
         <label>Klijent<select class="field" bind:value={documentClientId}><option value={null}>Bez klijenta</option>{#each clients as client}<option value={client.id}>{client.name}</option>{/each}</select></label>
@@ -830,11 +925,11 @@
       <div class="list">
         {#each documents as document}
           <div class="list-item">
-            <div><h3>{document.title}</h3><p>{document.file_name} · {document.created_at}</p></div>
+            <div><h3>{document.title}</h3><p>{document.file_name} · {formatDate(document.created_at)}</p></div>
             <div class="row-actions">
               <button class="button primary-soft" onclick={() => openDocument(document)}>Otvori</button>
               <button class="button" onclick={() => editDocument(document)}>Uredi</button>
-              <button class="button danger" onclick={() => run(() => api.deleteDocument(document.id), 'Dokument je uklonjen.')}>Ukloni</button>
+              <button class="button danger" onclick={() => removeDocument(document)}>Ukloni</button>
             </div>
           </div>
         {:else}
@@ -859,8 +954,8 @@
             <div class="timeline-dot"></div>
             <div class="card">
               <div class="section-heading">
-                <div><strong>{activity.title}</strong><span>{activity.kind} · {activity.happened_at || activity.created_at}</span></div>
-                <button class="button danger" onclick={() => run(() => api.deleteActivity(activity.id), 'Aktivnost je uklonjena.')}>Ukloni</button>
+                <div><strong>{activity.title}</strong><span>{activity.kind} · {formatDate(activity.happened_at || activity.created_at)}</span></div>
+                <button class="button danger" onclick={() => removeActivity(activity)}>Ukloni</button>
               </div>
               {#if activity.client_name || activity.project_name}<p class="muted">{activity.client_name || ''}{activity.client_name && activity.project_name ? ' · ' : ''}{activity.project_name || ''}</p>{/if}
               {#if activity.details}<p class="detail-text">{activity.details}</p>{/if}
@@ -900,7 +995,7 @@
             <div class="row-actions">
               <strong class="money">{money(record.amount_cents, record.currency)}</strong>
               <button class="button" onclick={() => editFinance(record)}>Uredi</button>
-              <button class="button danger" onclick={() => run(() => api.deleteFinance(record.id), 'Financijski zapis je uklonjen.')}>Ukloni</button>
+              <button class="button danger" onclick={() => removeFinance(record)}>Ukloni</button>
             </div>
           </div>
         {:else}
@@ -908,28 +1003,28 @@
         {/each}
       </div>
     {:else if section === 'settings'}
-      <h1 class="page-title">Backup i podaci</h1>
-      <p class="page-subtitle">Virelo nema obavezni cloud. Ovdje kontroliraš lokalnu bazu i izvoz podataka.</p>
+      <h1 class="page-title">Sigurnosne kopije</h1>
+      <p class="page-subtitle">Spremi sigurnosnu kopiju ili izvezi poslovne podatke kada god želiš.</p>
 
       <div class="settings-grid">
         <section class="card">
-          <h2>SQLite backup</h2>
-          <p class="muted">Stvara kopiju kompletne lokalne baze koju možeš arhivirati na vlastiti disk.</p>
-          <button class="button primary" disabled={busy} onclick={backupDatabase}>Spremi SQLite backup</button>
+          <h2>Sigurnosna kopija</h2>
+          <p class="muted">Spremi cjelovitu kopiju podataka na lokaciju koju odabereš.</p>
+          <button class="button primary" disabled={busy} onclick={backupDatabase}>Spremi sigurnosnu kopiju</button>
         </section>
         <section class="card">
-          <h2>JSON izvoz</h2>
-          <p class="muted">Izvozi firmu, klijente, projekte, zadatke, bilješke, dokumente, aktivnosti i financije.</p>
-          <button class="button primary" disabled={busy} onclick={exportJson}>Izvezi workspace u JSON</button>
+          <h2>Izvoz podataka</h2>
+          <p class="muted">Izvezi firmu, klijente, projekte, zadatke, bilješke, dokumente, aktivnosti i financije.</p>
+          <button class="button primary" disabled={busy} onclick={exportJson}>Izvezi podatke</button>
         </section>
       </div>
 
       <section class="card data-info">
-        <h2>Lokalne putanje</h2>
+        <h2>O aplikaciji</h2>
         <dl>
+          <div><dt>Proizvod</dt><dd>Virelo</dd></div>
           <div><dt>Verzija</dt><dd>{appInfo?.version || '—'}</dd></div>
-          <div><dt>Data direktorij</dt><dd>{appInfo?.data_dir || '—'}</dd></div>
-          <div><dt>SQLite baza</dt><dd>{appInfo?.database_path || '—'}</dd></div>
+          <div><dt>Podaci</dt><dd>Sigurnosna kopija i izvoz dostupni su iz ovog izbornika.</dd></div>
         </dl>
       </section>
     {/if}
