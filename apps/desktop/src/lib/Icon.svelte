@@ -1,27 +1,5 @@
 <script lang="ts">
-  export let name:
-    | 'home'
-    | 'building'
-    | 'users'
-    | 'contact'
-    | 'folder'
-    | 'check'
-    | 'note'
-    | 'file'
-    | 'activity'
-    | 'wallet'
-    | 'backup'
-    | 'search'
-    | 'plus'
-    | 'edit'
-    | 'trash'
-    | 'open'
-    | 'export'
-    | 'calendar'
-    | 'mail'
-    | 'phone'
-    | 'briefcase'
-    | 'sparkles' = 'home';
+  export let name = 'home';
 
   export let size = 18;
   export let strokeWidth = 1.8;
