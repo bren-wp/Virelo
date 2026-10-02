@@ -3,10 +3,13 @@
   import { confirm, open, save } from '@tauri-apps/plugin-dialog';
   import { openPath } from '@tauri-apps/plugin-opener';
   import { api } from '$lib/api';
+  import Icon from '$lib/Icon.svelte';
+  import BrandMark from '$lib/BrandMark.svelte';
   import type {
     ActivityRecord,
     AppInfo,
     Client,
+    ClientContact,
     CompanyProfile,
     DashboardStats,
     DocumentRecord,
@@ -46,6 +49,15 @@
     city: '',
     country: 'Hrvatska',
     status: 'Aktivan',
+    notes: ''
+  });
+
+  const emptyContact = () => ({
+    client_id: null as number | null,
+    name: '',
+    role: '',
+    email: '',
+    phone: '',
     notes: ''
   });
 
@@ -102,6 +114,7 @@
   let stats: DashboardStats = { clients: 0, active_projects: 0, notes: 0, documents: 0 };
   let company: CompanyProfile = emptyCompany();
   let clients: Client[] = [];
+  let contacts: ClientContact[] = [];
   let projects: Project[] = [];
   let notes: Note[] = [];
   let documents: DocumentRecord[] = [];
@@ -120,6 +133,9 @@
 
   let clientForm = emptyClient();
   let editingClientId: number | null = null;
+
+  let contactForm = emptyContact();
+  let editingContactId: number | null = null;
 
   let projectForm = emptyProject();
   let projectValue = 0;
@@ -146,6 +162,7 @@
     { id: 'dashboard', label: 'Pregled', group: 'workspace' },
     { id: 'company', label: 'Moja firma', group: 'workspace' },
     { id: 'clients', label: 'Klijenti', group: 'workspace' },
+    { id: 'contacts', label: 'Kontakti', group: 'workspace' },
     { id: 'projects', label: 'Projekti', group: 'workspace' },
     { id: 'tasks', label: 'Zadaci', group: 'workspace' },
     { id: 'notes', label: 'Bilješke', group: 'workspace' },
@@ -154,6 +171,22 @@
     { id: 'finance', label: 'Financije', group: 'workspace' },
     { id: 'settings', label: 'Sigurnosna kopija', group: 'tools' }
   ];
+
+  function navIcon(sectionId: Section) {
+    return ({
+      dashboard: 'home',
+      company: 'building',
+      clients: 'users',
+      contacts: 'contact',
+      projects: 'briefcase',
+      tasks: 'check',
+      notes: 'note',
+      documents: 'file',
+      activities: 'activity',
+      finance: 'wallet',
+      settings: 'backup'
+    } as Record<Section, string>)[sectionId];
+  }
 
   function showMessage(text: string, error = false) {
     message = text;
@@ -175,6 +208,7 @@
   function kindLabel(kind: string) {
     return ({
       client: 'Klijent',
+      contact: 'Kontakt',
       project: 'Projekt',
       task: 'Zadatak',
       note: 'Bilješka',
@@ -219,6 +253,7 @@
       api.dashboard(),
       api.company(),
       api.clients(),
+      api.contacts(),
       api.projects(),
       api.notes(),
       api.documents(),
@@ -228,7 +263,7 @@
       api.info()
     ]);
 
-    [stats, company, clients, projects, notes, documents, tasks, activities, finance, appInfo] = result;
+    [stats, company, clients, contacts, projects, notes, documents, tasks, activities, finance, appInfo] = result;
   }
 
   async function run(action: () => Promise<unknown>, success: string): Promise<boolean> {
@@ -293,6 +328,54 @@
       : await run(() => api.createClient(clientForm), 'Klijent je dodan.');
 
     if (ok) resetClientForm();
+  }
+
+  function resetContactForm() {
+    contactForm = emptyContact();
+    editingContactId = null;
+  }
+
+  function editContact(contact: ClientContact) {
+    editingContactId = contact.id;
+    contactForm = {
+      client_id: contact.client_id,
+      name: contact.name,
+      role: contact.role,
+      email: contact.email,
+      phone: contact.phone,
+      notes: contact.notes
+    };
+  }
+
+  async function saveContact() {
+    if (!contactForm.client_id || !contactForm.name.trim()) {
+      showMessage('Klijent i ime kontakta su obavezni.', true);
+      return;
+    }
+
+    const ok = editingContactId
+      ? await run(
+          () =>
+            api.updateContact({
+              ...contactForm,
+              id: editingContactId as number,
+              client_id: contactForm.client_id as number,
+              client_name: null,
+              created_at: '',
+              updated_at: ''
+            }),
+          'Kontakt je ažuriran.'
+        )
+      : await run(
+          () =>
+            api.createContact({
+              ...contactForm,
+              client_id: contactForm.client_id as number
+            }),
+          'Kontakt je dodan.'
+        );
+
+    if (ok) resetContactForm();
   }
 
   function resetProjectForm() {
@@ -535,6 +618,33 @@
     await run(() => api.exportJson(destination), 'Izvoz podataka je spremljen.');
   }
 
+  async function exportCsv() {
+    const destination = await save({
+      defaultPath: 'Virelo-podaci.csv',
+      filters: [{ name: 'CSV tablica', extensions: ['csv'] }]
+    });
+    if (!destination) return;
+    await run(() => api.exportCsv(destination), 'CSV izvoz je spremljen.');
+  }
+
+  async function exportMarkdown() {
+    const destination = await save({
+      defaultPath: 'Virelo-podaci.md',
+      filters: [{ name: 'Markdown', extensions: ['md'] }]
+    });
+    if (!destination) return;
+    await run(() => api.exportMarkdown(destination), 'Markdown izvoz je spremljen.');
+  }
+
+  async function exportHtml() {
+    const destination = await save({
+      defaultPath: 'Virelo-podaci.html',
+      filters: [{ name: 'HTML izvještaj', extensions: ['html'] }]
+    });
+    if (!destination) return;
+    await run(() => api.exportHtml(destination), 'HTML izvještaj je spremljen.');
+  }
+
   async function backupDatabase() {
     const destination = await save({
       defaultPath: 'Virelo-sigurnosna-kopija.db',
@@ -547,6 +657,11 @@
   async function removeClient(client: Client) {
     if (!(await confirmRemoval(`Ukloniti klijenta “${client.name}”? Povezani projekti i zapisi neće se automatski izbrisati.`))) return;
     await run(() => api.deleteClient(client.id), 'Klijent je uklonjen.');
+  }
+
+  async function removeContact(contact: ClientContact) {
+    if (!(await confirmRemoval(`Ukloniti kontakt “${contact.name}”?`))) return;
+    await run(() => api.deleteContact(contact.id), 'Kontakt je uklonjen.');
   }
 
   async function removeProject(project: Project) {
@@ -594,6 +709,7 @@
   function openSearchHit(hit: SearchHit) {
     const target: Record<string, Section> = {
       client: 'clients',
+      contact: 'contacts',
       project: 'projects',
       task: 'tasks',
       note: 'notes',
@@ -645,7 +761,7 @@
   {#if sidebarOpen}<button class="sidebar-scrim" aria-label="Zatvori navigaciju" onclick={() => (sidebarOpen = false)}></button>{/if}
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-mark">V</div>
+      <div class="brand-mark"><BrandMark /></div>
       <div>
         <strong>Virelo</strong>
         <span>Poslovni sustav</span>
@@ -655,14 +771,16 @@
     <div class="nav-label">Poslovanje</div>
     {#each nav.filter((item) => item.group === 'workspace') as item}
       <button class:active={section === item.id} class="nav-button" onclick={() => navigate(item.id)}>
-        {item.label}
+        <Icon name={navIcon(item.id)} size={17} />
+        <span>{item.label}</span>
       </button>
     {/each}
 
     <div class="nav-label">Alati</div>
     {#each nav.filter((item) => item.group === 'tools') as item}
       <button class:active={section === item.id} class="nav-button" onclick={() => navigate(item.id)}>
-        {item.label}
+        <Icon name={navIcon(item.id)} size={17} />
+        <span>{item.label}</span>
       </button>
     {/each}
 
@@ -674,8 +792,9 @@
 
   <main class="main">
     <div class="topbar">
-      <button class="menu-button" aria-label="Otvori navigaciju" onclick={() => (sidebarOpen = true)}>☰</button>
+      <button class="menu-button" aria-label="Otvori navigaciju" onclick={() => (sidebarOpen = true)}><Icon name="menu" size={19} /></button>
       <div class="search-wrap">
+        <span class="search-icon"><Icon name="search" size={17} /></span>
         <input
           class="search-input"
           placeholder="Pretraži Virelo…"
@@ -694,7 +813,7 @@
           </div>
         {/if}
       </div>
-      <button class="quick-action" onclick={() => navigate('tasks')}>Novi zadatak</button>
+      <button class="quick-action" onclick={() => navigate('tasks')}><Icon name="plus" size={16} />Novi zadatak</button>
     </div>
 
     {#if message}
@@ -707,17 +826,17 @@
 
       <div class="stats-grid">
         <button class="card stat-card" onclick={() => navigate('clients')}>
-          <div class="stat-value">{stats.clients}</div><div class="muted">Klijenti</div>
+          <div class="stat-head"><Icon name="users" size={18} /><span>Klijenti</span></div><div class="stat-value">{stats.clients}</div>
         </button>
         <button class="card stat-card" onclick={() => navigate('projects')}>
-          <div class="stat-value">{stats.active_projects}</div><div class="muted">Aktivni projekti</div>
+          <div class="stat-head"><Icon name="briefcase" size={18} /><span>Aktivni projekti</span></div><div class="stat-value">{stats.active_projects}</div>
         </button>
         <button class="card stat-card" onclick={() => navigate('tasks')}>
+          <div class="stat-head"><Icon name="check" size={18} /><span>Otvoreni zadaci</span></div>
           <div class="stat-value">{tasks.filter((task) => task.status !== 'Završen').length}</div>
-          <div class="muted">Otvoreni zadaci</div>
         </button>
         <button class="card stat-card" onclick={() => navigate('documents')}>
-          <div class="stat-value">{stats.documents}</div><div class="muted">Dokumenti</div>
+          <div class="stat-head"><Icon name="file" size={18} /><span>Dokumenti</span></div><div class="stat-value">{stats.documents}</div>
         </button>
       </div>
 
@@ -806,12 +925,59 @@
               <p>{client.status} · {client.tax_id || 'bez poreznog ID-a'} · {client.email || 'bez e-maila'}</p>
             </div>
             <div class="row-actions">
-              <button class="button" onclick={() => editClient(client)}>Uredi</button>
-              <button class="button danger" onclick={() => removeClient(client)}>Ukloni</button>
+              <button class="button" onclick={() => editClient(client)}><Icon name="edit" size={15} />Uredi</button>
+              <button class="button danger" onclick={() => removeClient(client)}><Icon name="trash" size={15} />Ukloni</button>
             </div>
           </div>
         {:else}
           <div class="empty">Još nema klijenata.</div>
+        {/each}
+      </div>
+    {:else if section === 'contacts'}
+      <div class="page-heading-row">
+        <div>
+          <h1 class="page-title">Kontakti</h1>
+          <p class="page-subtitle">Kontakt-osobe klijenata s funkcijom, telefonom, e-mailom i bilješkama.</p>
+        </div>
+        <div class="heading-badge"><Icon name="contact" size={16} />{contacts.length} kontakata</div>
+      </div>
+
+      <div class="card form-grid">
+        <label>Klijent<select class="field" bind:value={contactForm.client_id}><option value={null}>Odaberi klijenta</option>{#each clients as client}<option value={client.id}>{client.name}</option>{/each}</select></label>
+        <label>Ime i prezime<input class="field" bind:value={contactForm.name} /></label>
+        <label>Funkcija / odjel<input class="field" bind:value={contactForm.role} placeholder="npr. direktor, računovodstvo" /></label>
+        <label>E-mail<input class="field" type="email" bind:value={contactForm.email} /></label>
+        <label>Telefon<input class="field" bind:value={contactForm.phone} /></label>
+        <label class="wide">Bilješke<textarea class="field" bind:value={contactForm.notes}></textarea></label>
+        <div class="wide form-actions">
+          <button class="button primary" disabled={busy} onclick={saveContact}><Icon name={editingContactId ? 'edit' : 'plus'} size={15} />{editingContactId ? 'Spremi izmjene' : 'Dodaj kontakt'}</button>
+          {#if editingContactId}<button class="button" onclick={resetContactForm}>Odustani</button>{/if}
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <strong>{contacts.length} kontakata</strong>
+        <span class="muted">Kontakt-osobe ostaju povezane sa svojim klijentom.</span>
+      </div>
+      <div class="list">
+        {#each contacts as contact}
+          <div class="list-item contact-item">
+            <div class="contact-avatar">{contact.name.slice(0, 1).toUpperCase()}</div>
+            <div>
+              <h3>{contact.name}</h3>
+              <p>{contact.client_name || 'bez klijenta'}{contact.role ? ` · ${contact.role}` : ''}</p>
+              <div class="contact-meta">
+                {#if contact.email}<span><Icon name="mail" size={13} />{contact.email}</span>{/if}
+                {#if contact.phone}<span><Icon name="phone" size={13} />{contact.phone}</span>{/if}
+              </div>
+            </div>
+            <div class="row-actions">
+              <button class="button" onclick={() => editContact(contact)}><Icon name="edit" size={15} />Uredi</button>
+              <button class="button danger" onclick={() => removeContact(contact)}><Icon name="trash" size={15} />Ukloni</button>
+            </div>
+          </div>
+        {:else}
+          <div class="empty">Još nema kontakt-osoba. Dodaj prvu osobu povezanu s klijentom.</div>
         {/each}
       </div>
     {:else if section === 'projects'}
@@ -842,8 +1008,8 @@
             </div>
             <div class="row-actions">
               <span class="chip">{project.priority}</span>
-              <button class="button" onclick={() => editProject(project)}>Uredi</button>
-              <button class="button danger" onclick={() => removeProject(project)}>Ukloni</button>
+              <button class="button" onclick={() => editProject(project)}><Icon name="edit" size={15} />Uredi</button>
+              <button class="button danger" onclick={() => removeProject(project)}><Icon name="trash" size={15} />Ukloni</button>
             </div>
           </div>
         {:else}
@@ -876,8 +1042,8 @@
             </div>
             <div class="row-actions">
               <span class="chip">{task.priority}</span>
-              <button class="button" onclick={() => editTask(task)}>Uredi</button>
-              <button class="button danger" onclick={() => removeTask(task)}>Ukloni</button>
+              <button class="button" onclick={() => editTask(task)}><Icon name="edit" size={15} />Uredi</button>
+              <button class="button danger" onclick={() => removeTask(task)}><Icon name="trash" size={15} />Ukloni</button>
             </div>
           </div>
         {:else}
@@ -904,8 +1070,8 @@
           <div class="list-item">
             <div><h3>{note.title}</h3><p>{note.tags || 'bez tagova'} · {formatDate(note.updated_at)}</p></div>
             <div class="row-actions">
-              <button class="button" onclick={() => editNote(note)}>Uredi</button>
-              <button class="button danger" onclick={() => removeNote(note)}>Ukloni</button>
+              <button class="button" onclick={() => editNote(note)}><Icon name="edit" size={15} />Uredi</button>
+              <button class="button danger" onclick={() => removeNote(note)}><Icon name="trash" size={15} />Ukloni</button>
             </div>
           </div>
         {:else}
@@ -936,9 +1102,9 @@
           <div class="list-item">
             <div><h3>{document.title}</h3><p>{document.file_name} · {formatDate(document.created_at)}</p></div>
             <div class="row-actions">
-              <button class="button primary-soft" onclick={() => openDocument(document)}>Otvori</button>
-              <button class="button" onclick={() => editDocument(document)}>Uredi</button>
-              <button class="button danger" onclick={() => removeDocument(document)}>Ukloni</button>
+              <button class="button primary-soft" onclick={() => openDocument(document)}><Icon name="open" size={15} />Otvori</button>
+              <button class="button" onclick={() => editDocument(document)}><Icon name="edit" size={15} />Uredi</button>
+              <button class="button danger" onclick={() => removeDocument(document)}><Icon name="trash" size={15} />Ukloni</button>
             </div>
           </div>
         {:else}
@@ -964,7 +1130,7 @@
             <div class="card">
               <div class="section-heading">
                 <div><strong>{activity.title}</strong><span>{activity.kind} · {formatDate(activity.happened_at || activity.created_at)}</span></div>
-                <button class="button danger" onclick={() => removeActivity(activity)}>Ukloni</button>
+                <button class="button danger" onclick={() => removeActivity(activity)}><Icon name="trash" size={15} />Ukloni</button>
               </div>
               {#if activity.client_name || activity.project_name}<p class="muted">{activity.client_name || ''}{activity.client_name && activity.project_name ? ' · ' : ''}{activity.project_name || ''}</p>{/if}
               {#if activity.details}<p class="detail-text">{activity.details}</p>{/if}
@@ -976,7 +1142,7 @@
       </div>
     {:else if section === 'finance'}
       <h1 class="page-title">Financije</h1>
-      <p class="page-subtitle">Ponude, računi i troškovi kao lokalna poslovna evidencija.</p>
+      <p class="page-subtitle">Ponude, računi i troškovi povezani s klijentima i poslovanjem.</p>
       <div class="card form-grid">
         <label>Vrsta<select class="field" bind:value={financeForm.kind}><option>Ponuda</option><option>Račun</option><option>Trošak</option><option>Ostalo</option></select></label>
         <label>Broj / oznaka<input class="field" bind:value={financeForm.number} /></label>
@@ -1003,8 +1169,8 @@
             </div>
             <div class="row-actions">
               <strong class="money">{money(record.amount_cents, record.currency)}</strong>
-              <button class="button" onclick={() => editFinance(record)}>Uredi</button>
-              <button class="button danger" onclick={() => removeFinance(record)}>Ukloni</button>
+              <button class="button" onclick={() => editFinance(record)}><Icon name="edit" size={15} />Uredi</button>
+              <button class="button danger" onclick={() => removeFinance(record)}><Icon name="trash" size={15} />Ukloni</button>
             </div>
           </div>
         {:else}
@@ -1015,16 +1181,36 @@
       <h1 class="page-title">Sigurnosne kopije</h1>
       <p class="page-subtitle">Spremi sigurnosnu kopiju ili izvezi poslovne podatke kada god želiš.</p>
 
-      <div class="settings-grid">
-        <section class="card">
+      <div class="settings-grid export-grid">
+        <section class="card export-card">
+          <div class="export-icon"><Icon name="backup" size={20} /></div>
           <h2>Sigurnosna kopija</h2>
-          <p class="muted">Spremi cjelovitu kopiju podataka na lokaciju koju odabereš.</p>
-          <button class="button primary" disabled={busy} onclick={backupDatabase}>Spremi sigurnosnu kopiju</button>
+          <p class="muted">Cjelovita kopija baze za povrat podataka.</p>
+          <button class="button primary" disabled={busy} onclick={backupDatabase}><Icon name="backup" size={15} />Spremi kopiju</button>
         </section>
-        <section class="card">
-          <h2>Izvoz podataka</h2>
-          <p class="muted">Izvezi firmu, klijente, projekte, zadatke, bilješke, dokumente, aktivnosti i financije.</p>
-          <button class="button primary" disabled={busy} onclick={exportJson}>Izvezi podatke</button>
+        <section class="card export-card">
+          <div class="export-icon"><Icon name="export" size={20} /></div>
+          <h2>JSON</h2>
+          <p class="muted">Strukturirani potpuni izvoz za prijenos i automatizaciju.</p>
+          <button class="button" disabled={busy} onclick={exportJson}><Icon name="export" size={15} />Izvezi JSON</button>
+        </section>
+        <section class="card export-card">
+          <div class="export-icon"><Icon name="export" size={20} /></div>
+          <h2>CSV</h2>
+          <p class="muted">Tablični izvoz prikladan za Excel, Numbers i druge alate.</p>
+          <button class="button" disabled={busy} onclick={exportCsv}><Icon name="export" size={15} />Izvezi CSV</button>
+        </section>
+        <section class="card export-card">
+          <div class="export-icon"><Icon name="note" size={20} /></div>
+          <h2>Markdown</h2>
+          <p class="muted">Čitljiv tekstualni format za arhivu, bilješke i druge editore.</p>
+          <button class="button" disabled={busy} onclick={exportMarkdown}><Icon name="export" size={15} />Izvezi Markdown</button>
+        </section>
+        <section class="card export-card">
+          <div class="export-icon"><Icon name="file" size={20} /></div>
+          <h2>HTML izvještaj</h2>
+          <p class="muted">Samostalni izvještaj koji se otvara u svakom modernom pregledniku.</p>
+          <button class="button" disabled={busy} onclick={exportHtml}><Icon name="export" size={15} />Izvezi HTML</button>
         </section>
       </div>
 

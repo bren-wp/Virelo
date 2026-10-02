@@ -2,6 +2,7 @@ export type Section =
   | 'dashboard'
   | 'company'
   | 'clients'
+  | 'contacts'
   | 'projects'
   | 'tasks'
   | 'notes'
@@ -48,6 +49,19 @@ export interface Client {
   status: string;
   notes: string;
   created_at: string;
+}
+
+export interface ClientContact {
+  id: number;
+  client_id: number;
+  client_name: string | null;
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Project {

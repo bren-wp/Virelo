@@ -1,33 +1,48 @@
 # Virelo
 
-**Virelo** je local-first poslovni workspace za Windows, macOS i Linux. Podaci ostaju na korisničkom uređaju i aplikacija ne zahtijeva obavezni račun, cloud, pretplatu ni telemetriju.
+**Virelo** je desktop poslovni sustav za organizaciju podataka firme, klijenata, kontakt-osoba, projekata, zadataka, bilješki, dokumenata, aktivnosti i financijske evidencije.
 
-## Virelo 1.0
+## Virelo 1.2
 
 Virelo objedinjuje:
 
 - podatke firme: OIB / PIB / DIČ, MBO / MBS / IČO, adresa, kontakti, IBAN, SWIFT/BIC i banka
-- klijente i kontakte
-- projekte s rokovima, statusima, prioritetima i vrijednostima
+- klijente s poslovnim i poreznim podacima
+- kontakt-osobe svakog klijenta s funkcijom, e-mailom, telefonom i bilješkama
+- projekte sa statusima, prioritetima, rokovima i vrijednostima
 - zadatke povezane s klijentima i projektima
-- Markdown bilješke i tagove
-- lokalne dokumente
-- kronologiju aktivnosti: pozivi, sastanci, e-mailovi, ugovori i bilješke
-- lokalnu evidenciju ponuda, računa i troškova
-- globalnu pretragu cijelog workspacea
-- SQLite backup
-- JSON izvoz workspacea
+- Markdown bilješke i oznake
+- dokumente i ugovore povezane s poslovnim zapisima
+- kronologiju poziva, sastanaka, e-mailova i drugih aktivnosti
+- ponude, račune, troškove i druge financijske zapise
+- globalnu pretragu kroz sve glavne module
+- sigurnosnu kopiju baze
+- izvoz u JSON, CSV, Markdown i HTML
 
-## Privatnost
+## Windows aplikacija
 
-Virelo je local-first:
+Windows izdanje proizvodi:
 
-- nema obavezne registracije
-- nema obaveznog clouda
-- nema telemetrije
-- nema zaključavanja podataka u proprietarni servis
-- poslovni zapisi spremaju se u lokalnu SQLite bazu
-- uvezeni dokumenti kopiraju se u Virelo application-data direktorij
+- `Virelo-Setup.exe` — instalacijska verzija
+- `Virelo-Portable.exe` — prijenosna verzija
+
+Produkcijski pipeline provjerava:
+
+- Svelte provjeru i production frontend build
+- Rust format, compile, funkcionalne testove i clippy bez upozorenja
+- Windows PE zaglavlje
+- Windows GUI subsystem, kako se uz aplikaciju ne bi otvarao konzolni prozor
+- stvarno pokretanje Portable EXE-a kao launch smoke test
+
+## Izvoz podataka
+
+Virelo podržava više otvorenih formata:
+
+- **JSON** — potpuni strukturirani izvoz
+- **CSV** — tablični izvoz za Excel, Numbers i druge alate
+- **Markdown** — čitljiva tekstualna arhiva
+- **HTML** — samostalni izvještaj koji se otvara u pregledniku
+- **DB sigurnosna kopija** — cjelovita kopija baze
 
 ## Tehnologije
 
@@ -37,43 +52,16 @@ Virelo je local-first:
 - TypeScript
 - SQLite
 
-## Windows buildovi
-
-GitHub Actions proizvodi i provjerava:
-
-- `Virelo-Setup.exe` — NSIS instalacijski paket
-- `Virelo-Portable.exe` — samostalni Windows executable
-
-Windows pipeline provjerava da oba artefakta postoje i imaju valjano PE zaglavlje te pokreće Portable EXE kao launch smoke test.
-
-Na uspješnom buildu grane `main` buildovi se objavljuju u GitHub Release **v1.0.0**.
-
-## Lokalni razvoj
-
-Potrebni su Node.js 22+, Rust stable i platform-specific Tauri dependencies.
+## Razvoj
 
 ```bash
 npm install
 npm run check
 npm run build
 cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
 ```
-
-Pokretanje desktop aplikacije:
-
-```bash
-npm --workspace @virelo/desktop run tauri -- dev
-```
-
-Produkcijski Tauri build:
-
-```bash
-npm --workspace @virelo/desktop run tauri -- build
-```
-
-## Sigurnost podataka
-
-SQLite koristi foreign keys i WAL način rada. Brisanje upravljanih dokumenata ograničeno je na Virelo documents direktorij. Backup i JSON izvoz korisnik pokreće ručno i bira vlastitu lokaciju.
 
 ## Licenca
 

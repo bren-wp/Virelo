@@ -509,7 +509,7 @@ mod tests {
     use super::*;
     use crate::{
         extras,
-        models::{ActivityRecord, FinanceRecord, Note, Project, TaskRecord},
+        models::{ActivityRecord, ClientContact, FinanceRecord, Note, Project, TaskRecord},
     };
 
     fn test_state() -> AppState {
@@ -552,6 +552,23 @@ mod tests {
             },
         )
         .expect("create client");
+
+        extras::create_client_contact(
+            &state,
+            ClientContact {
+                id: 0,
+                client_id,
+                client_name: None,
+                name: "Ana Test".into(),
+                role: "Računovodstvo".into(),
+                email: "ana@example.com".into(),
+                phone: "+385 51 123 456".into(),
+                notes: "Primarni financijski kontakt".into(),
+                created_at: String::new(),
+                updated_at: String::new(),
+            },
+        )
+        .expect("create client contact");
 
         let project_id = create_project(
             &state,
@@ -654,6 +671,12 @@ mod tests {
         .expect("import document");
 
         assert_eq!(list_clients(&state).expect("list clients").len(), 1);
+        assert_eq!(
+            extras::list_client_contacts(&state)
+                .expect("list client contacts")
+                .len(),
+            1
+        );
         assert_eq!(list_projects(&state).expect("list projects").len(), 1);
         assert_eq!(list_notes(&state).expect("list notes").len(), 1);
         assert_eq!(list_documents(&state).expect("list documents").len(), 1);
@@ -673,6 +696,43 @@ mod tests {
 
         let search = extras::global_search(&state, "Virelo QA".into()).expect("global search");
         assert!(search.iter().any(|hit| hit.kind == "project"));
+
+        let contact_search =
+            extras::global_search(&state, "Ana Test".into()).expect("contact search");
+        assert!(contact_search.iter().any(|hit| hit.kind == "contact"));
+
+        let export_root = state
+            .documents_dir
+            .parent()
+            .expect("test export directory")
+            .to_path_buf();
+
+        let json_path = export_root.join("export.json");
+        let csv_path = export_root.join("export.csv");
+        let md_path = export_root.join("export.md");
+        let html_path = export_root.join("export.html");
+
+        extras::export_workspace_json(&state, json_path.to_string_lossy().into_owned())
+            .expect("json export");
+        extras::export_workspace_csv(&state, csv_path.to_string_lossy().into_owned())
+            .expect("csv export");
+        extras::export_workspace_markdown(&state, md_path.to_string_lossy().into_owned())
+            .expect("markdown export");
+        extras::export_workspace_html(&state, html_path.to_string_lossy().into_owned())
+            .expect("html export");
+
+        assert!(fs::read_to_string(json_path)
+            .expect("read json")
+            .contains("Ana Test"));
+        assert!(fs::read_to_string(csv_path)
+            .expect("read csv")
+            .contains("Ana Test"));
+        assert!(fs::read_to_string(md_path)
+            .expect("read markdown")
+            .contains("Ana Test"));
+        assert!(fs::read_to_string(html_path)
+            .expect("read html")
+            .contains("Ana Test"));
 
         let stats = dashboard_stats(&state).expect("dashboard stats");
         assert_eq!(stats.clients, 1);
