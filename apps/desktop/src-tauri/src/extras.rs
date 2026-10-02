@@ -1412,8 +1412,7 @@ pub fn export_workspace_archive(state: &AppState, destination: String) -> Result
         "finance": list_finance_records(state)?
     });
 
-    let json_data =
-        serde_json::to_vec_pretty(&payload).map_err(|error| error.to_string())?;
+    let json_data = serde_json::to_vec_pretty(&payload).map_err(|error| error.to_string())?;
 
     let file = fs::File::create(destination).map_err(|error| error.to_string())?;
     let mut archive = ZipWriter::new(file);
@@ -1440,8 +1439,7 @@ pub fn export_workspace_archive(state: &AppState, destination: String) -> Result
     archive
         .start_file("virelo.sqlite3", options)
         .map_err(|error| error.to_string())?;
-    let mut database =
-        fs::File::open(&state.database_path).map_err(|error| error.to_string())?;
+    let mut database = fs::File::open(&state.database_path).map_err(|error| error.to_string())?;
     std::io::copy(&mut database, &mut archive).map_err(|error| error.to_string())?;
 
     if state.documents_dir.is_dir() {
@@ -1464,7 +1462,9 @@ pub fn export_workspace_archive(state: &AppState, destination: String) -> Result
             let mut source = fs::File::open(&path).map_err(|error| error.to_string())?;
             let mut buffer = [0u8; 64 * 1024];
             loop {
-                let read = source.read(&mut buffer).map_err(|error| error.to_string())?;
+                let read = source
+                    .read(&mut buffer)
+                    .map_err(|error| error.to_string())?;
                 if read == 0 {
                     break;
                 }
