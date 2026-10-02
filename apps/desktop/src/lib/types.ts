@@ -138,6 +138,4 @@ export interface SearchHit {
 
 export interface AppInfo {
   version: string;
-  data_dir: string;
-  database_path: string;
 }
