@@ -1,0 +1,105 @@
+name: Windows Production Build
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  windows-production:
+    name: Windows Setup and Portable
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Frontend validation
+        run: npm run check
+
+      - name: Build Windows application and NSIS installer
+        run: npm --workspace @virelo/desktop run tauri -- build --bundles nsis
+
+      - name: Collect Windows executables
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          $portable = Get-ChildItem "apps/desktop/src-tauri/target/release/*.exe" | Select-Object -First 1
+          $setup = Get-ChildItem "apps/desktop/src-tauri/target/release/bundle/nsis/*.exe" | Select-Object -First 1
+          if (-not $portable) { throw "Portable executable was not produced." }
+          if (-not $setup) { throw "NSIS setup executable was not produced." }
+          Copy-Item $portable.FullName "artifacts/Virelo-Portable.exe"
+          Copy-Item $setup.FullName "artifacts/Virelo-Setup.exe"
+          Get-ChildItem artifacts | Format-Table Name, Length
+
+      - name: Verify Windows artifacts
+        shell: pwsh
+        run: |
+          $files = @("artifacts/Virelo-Portable.exe", "artifacts/Virelo-Setup.exe")
+          foreach ($file in $files) {
+            if (-not (Test-Path $file)) { throw "Missing artifact: $file" }
+            $item = Get-Item $file
+            if ($item.Length -lt 1000000) { throw "Artifact is unexpectedly small: $file" }
+            $stream = [System.IO.File]::OpenRead($file)
+            try {
+              $first = $stream.ReadByte()
+              $second = $stream.ReadByte()
+            } finally {
+              $stream.Dispose()
+            }
+            if ($first -ne 0x4D -or $second -ne 0x5A) {
+              throw "Invalid Windows PE header: $file"
+            }
+          }
+
+      - name: Portable EXE launch smoke test
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath "$PWD/artifacts/Virelo-Portable.exe" -PassThru
+          Start-Sleep -Seconds 8
+          if ($process.HasExited) {
+            throw "Virelo portable executable exited during launch smoke test with code $($process.ExitCode)."
+          }
+          Stop-Process -Id $process.Id -Force
+          Write-Host "Portable launch smoke test passed."
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Virelo-Windows-1.0.0
+          path: |
+            artifacts/Virelo-Portable.exe
+            artifacts/Virelo-Setup.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish v1.0.0 GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v1.0.0"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --target "${{ github.sha }}" --title "Virelo v1.0.0" --notes "Prvo produkcijsko izdanje Virelo local-first business workspacea za Windows. Sadrži Setup i Portable EXE."
+          }
+          gh release upload $tag "artifacts/Virelo-Portable.exe" "artifacts/Virelo-Setup.exe" --clobber
