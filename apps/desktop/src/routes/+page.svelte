@@ -528,20 +528,20 @@
 
   async function exportJson() {
     const destination = await save({
-      defaultPath: 'Virelo-workspace.json',
-      filters: [{ name: 'Virelo JSON', extensions: ['json'] }]
+      defaultPath: 'Virelo-podaci.json',
+      filters: [{ name: 'Izvoz podataka', extensions: ['json'] }]
     });
     if (!destination) return;
-    await run(() => api.exportJson(destination), 'Virelo JSON izvoz je spremljen.');
+    await run(() => api.exportJson(destination), 'Izvoz podataka je spremljen.');
   }
 
   async function backupDatabase() {
     const destination = await save({
-      defaultPath: 'Virelo-backup.sqlite3',
-      filters: [{ name: 'SQLite backup', extensions: ['sqlite3', 'db'] }]
+      defaultPath: 'Virelo-sigurnosna-kopija.db',
+      filters: [{ name: 'Sigurnosna kopija', extensions: ['db'] }]
     });
     if (!destination) return;
-    await run(() => api.backupDatabase(destination), 'SQLite backup je spremljen.');
+    await run(() => api.backupDatabase(destination), 'Sigurnosna kopija je spremljena.');
   }
 
   async function removeClient(client: Client) {
@@ -668,7 +668,7 @@
 
     <div class="sidebar-footer">
       <strong>Virelo {appInfo ? `v${appInfo.version}` : ''}</strong>
-      <span>Poslovanje bez suvišnih koraka</span>
+      <span>Poslovni sustav</span>
     </div>
   </aside>
 
