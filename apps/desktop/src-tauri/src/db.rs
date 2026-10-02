@@ -728,7 +728,12 @@ mod tests {
                 .len(),
             1
         );
-        assert_eq!(extras::list_contracts(&state).expect("list contracts").len(), 1);
+        assert_eq!(
+            extras::list_contracts(&state)
+                .expect("list contracts")
+                .len(),
+            1
+        );
         assert_eq!(list_projects(&state).expect("list projects").len(), 1);
         assert_eq!(list_notes(&state).expect("list notes").len(), 1);
         assert_eq!(list_documents(&state).expect("list documents").len(), 1);
