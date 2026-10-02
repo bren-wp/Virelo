@@ -1,8 +1,8 @@
 {
   "name": "virelo",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Virelo — local-first business workspace.",
+  "description": "Virelo business workspace.",
   "license": "MIT",
   "workspaces": ["apps/desktop"],
   "scripts": {
