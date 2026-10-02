@@ -509,7 +509,10 @@ mod tests {
     use super::*;
     use crate::{
         extras,
-        models::{ActivityRecord, ClientContact, FinanceRecord, Note, Project, TaskRecord},
+        models::{
+            ActivityRecord, BankAccount, ClientContact, ContractRecord, FinanceRecord, Note,
+            Project, TaskRecord,
+        },
     };
 
     fn test_state() -> AppState {
@@ -569,6 +572,23 @@ mod tests {
             },
         )
         .expect("create client contact");
+
+        extras::create_bank_account(
+            &state,
+            BankAccount {
+                id: 0,
+                label: "Glavni račun".into(),
+                iban: "HR1223600001101234565".into(),
+                bic: "ZABAHR2X".into(),
+                bank_name: "Test banka".into(),
+                currency: "EUR".into(),
+                is_default: true,
+                notes: "Primarni račun".into(),
+                created_at: String::new(),
+                updated_at: String::new(),
+            },
+        )
+        .expect("create bank account");
 
         let project_id = create_project(
             &state,
@@ -661,7 +681,7 @@ mod tests {
 
         let source = state.documents_dir.join("virelo-test-document.txt");
         fs::write(&source, b"Virelo QA").expect("write source document");
-        import_document(
+        let document_id = import_document(
             &state,
             source.to_string_lossy().into_owned(),
             "QA dokument".into(),
@@ -670,6 +690,31 @@ mod tests {
         )
         .expect("import document");
 
+        extras::create_contract(
+            &state,
+            ContractRecord {
+                id: 0,
+                number: "UG-001".into(),
+                title: "Virelo QA ugovor".into(),
+                client_id: Some(client_id),
+                client_name: None,
+                project_id: Some(project_id),
+                project_name: None,
+                document_id: Some(document_id),
+                document_title: None,
+                status: "Aktivan".into(),
+                signed_date: "2026-10-02".into(),
+                start_date: "2026-10-02".into(),
+                end_date: "2027-10-02".into(),
+                value_cents: 125_000,
+                currency: "EUR".into(),
+                notes: "Test ugovora".into(),
+                created_at: String::new(),
+                updated_at: String::new(),
+            },
+        )
+        .expect("create contract");
+
         assert_eq!(list_clients(&state).expect("list clients").len(), 1);
         assert_eq!(
             extras::list_client_contacts(&state)
@@ -677,6 +722,13 @@ mod tests {
                 .len(),
             1
         );
+        assert_eq!(
+            extras::list_bank_accounts(&state)
+                .expect("list bank accounts")
+                .len(),
+            1
+        );
+        assert_eq!(extras::list_contracts(&state).expect("list contracts").len(), 1);
         assert_eq!(list_projects(&state).expect("list projects").len(), 1);
         assert_eq!(list_notes(&state).expect("list notes").len(), 1);
         assert_eq!(list_documents(&state).expect("list documents").len(), 1);
@@ -701,6 +753,14 @@ mod tests {
             extras::global_search(&state, "Ana Test".into()).expect("contact search");
         assert!(contact_search.iter().any(|hit| hit.kind == "contact"));
 
+        let bank_search =
+            extras::global_search(&state, "Glavni račun".into()).expect("bank account search");
+        assert!(bank_search.iter().any(|hit| hit.kind == "bank"));
+
+        let contract_search =
+            extras::global_search(&state, "QA ugovor".into()).expect("contract search");
+        assert!(contract_search.iter().any(|hit| hit.kind == "contract"));
+
         let export_root = state
             .documents_dir
             .parent()
@@ -711,6 +771,8 @@ mod tests {
         let csv_path = export_root.join("export.csv");
         let md_path = export_root.join("export.md");
         let html_path = export_root.join("export.html");
+        let yaml_path = export_root.join("export.yaml");
+        let xml_path = export_root.join("export.xml");
 
         extras::export_workspace_json(&state, json_path.to_string_lossy().into_owned())
             .expect("json export");
@@ -720,6 +782,10 @@ mod tests {
             .expect("markdown export");
         extras::export_workspace_html(&state, html_path.to_string_lossy().into_owned())
             .expect("html export");
+        extras::export_workspace_yaml(&state, yaml_path.to_string_lossy().into_owned())
+            .expect("yaml export");
+        extras::export_workspace_xml(&state, xml_path.to_string_lossy().into_owned())
+            .expect("xml export");
 
         assert!(fs::read_to_string(json_path)
             .expect("read json")
@@ -732,7 +798,13 @@ mod tests {
             .contains("Ana Test"));
         assert!(fs::read_to_string(html_path)
             .expect("read html")
-            .contains("Ana Test"));
+            .contains("Virelo QA ugovor"));
+        assert!(fs::read_to_string(yaml_path)
+            .expect("read yaml")
+            .contains("Glavni račun"));
+        assert!(fs::read_to_string(xml_path)
+            .expect("read xml")
+            .contains("Virelo QA ugovor"));
 
         let stats = dashboard_stats(&state).expect("dashboard stats");
         assert_eq!(stats.clients, 1);
