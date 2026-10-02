@@ -92,6 +92,7 @@ export const api = {
   exportHtml: (destination: string) => invoke<void>('export_workspace_html', { destination }),
   exportYaml: (destination: string) => invoke<void>('export_workspace_yaml', { destination }),
   exportXml: (destination: string) => invoke<void>('export_workspace_xml', { destination }),
+  exportArchive: (destination: string) => invoke<void>('export_workspace_archive', { destination }),
   backupDatabase: (destination: string) => invoke<void>('backup_database', { destination }),
   search: (query: string) => invoke<SearchHit[]>('global_search', { query })
 };
