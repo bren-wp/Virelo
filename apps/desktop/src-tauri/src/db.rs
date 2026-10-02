@@ -516,18 +516,19 @@ mod tests {
     };
 
     fn test_state() -> AppState {
-        let conn = Connection::open_in_memory().expect("in-memory database");
-        configure_database(&conn).expect("database pragmas");
-        migrate(&conn).expect("core migrations");
-        extras::migrate(&conn).expect("extended migrations");
-
         let data_dir = std::env::temp_dir().join(format!("virelo-test-{}", Uuid::new_v4()));
         let documents_dir = data_dir.join("documents");
         fs::create_dir_all(&documents_dir).expect("test documents directory");
 
+        let database_path = data_dir.join("virelo-test.sqlite3");
+        let conn = Connection::open(&database_path).expect("test database");
+        configure_database(&conn).expect("database pragmas");
+        migrate(&conn).expect("core migrations");
+        extras::migrate(&conn).expect("extended migrations");
+
         AppState {
             conn: Mutex::new(conn),
-            database_path: data_dir.join("virelo-test.sqlite3"),
+            database_path,
             documents_dir,
         }
     }
@@ -778,6 +779,7 @@ mod tests {
         let html_path = export_root.join("export.html");
         let yaml_path = export_root.join("export.yaml");
         let xml_path = export_root.join("export.xml");
+        let archive_path = export_root.join("Virelo-arhiva.zip");
 
         extras::export_workspace_json(&state, json_path.to_string_lossy().into_owned())
             .expect("json export");
@@ -791,6 +793,8 @@ mod tests {
             .expect("yaml export");
         extras::export_workspace_xml(&state, xml_path.to_string_lossy().into_owned())
             .expect("xml export");
+        extras::export_workspace_archive(&state, archive_path.to_string_lossy().into_owned())
+            .expect("archive export");
 
         assert!(fs::read_to_string(json_path)
             .expect("read json")
@@ -810,6 +814,14 @@ mod tests {
         assert!(fs::read_to_string(xml_path)
             .expect("read xml")
             .contains("Virelo QA ugovor"));
+
+        let archive_file = fs::File::open(&archive_path).expect("open archive");
+        let mut archive = zip::ZipArchive::new(archive_file).expect("read archive");
+        let archive_names: Vec<String> = archive.file_names().map(str::to_string).collect();
+        assert!(archive_names.iter().any(|name| name == "virelo-data.json"));
+        assert!(archive_names.iter().any(|name| name == "virelo.sqlite3"));
+        assert!(archive_names.iter().any(|name| name.starts_with("documents/")));
+        assert!(archive.by_name("README.txt").is_ok());
 
         let stats = dashboard_stats(&state).expect("dashboard stats");
         assert_eq!(stats.clients, 1);
