@@ -1,0 +1,15 @@
+{
+  "name": "virelo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Virelo — local-first business workspace.",
+  "license": "MIT",
+  "workspaces": ["apps/desktop"],
+  "scripts": {
+    "dev": "npm --workspace @virelo/desktop run dev",
+    "build": "npm --workspace @virelo/desktop run build",
+    "check": "npm --workspace @virelo/desktop run check",
+    "tauri": "npm --workspace @virelo/desktop run tauri"
+  },
+  "engines": { "node": ">=22" }
+}
