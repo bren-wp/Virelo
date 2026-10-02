@@ -63,7 +63,6 @@ pub struct ClientContact {
     pub updated_at: String,
 }
 
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BankAccount {
     #[serde(default)]
