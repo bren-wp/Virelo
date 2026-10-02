@@ -13,7 +13,7 @@ jobs:
   windows-production:
     name: Windows Setup and Portable
     runs-on: windows-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
@@ -84,22 +84,22 @@ jobs:
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Virelo-Windows-1.0.0
+          name: Virelo-Windows-1.1.0
           path: |
             artifacts/Virelo-Portable.exe
             artifacts/Virelo-Setup.exe
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish v1.0.0 GitHub Release
+      - name: Publish v1.1.0 GitHub Release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "v1.0.0"
+          $tag = "v1.1.0"
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --target "${{ github.sha }}" --title "Virelo v1.0.0" --notes "Prvo produkcijsko izdanje Virelo local-first business workspacea za Windows. Sadrži Setup i Portable EXE."
+            gh release create $tag --target "${{ github.sha }}" --title "Virelo v1.1.0" --notes "Produkcijsko izdanje s poboljšanim responzivnim sučeljem, sistemskim dijalozima, čišćim korisničkim tekstovima i dodatnim QA provjerama. Sadrži Setup i Portable EXE."
           }
           gh release upload $tag "artifacts/Virelo-Portable.exe" "artifacts/Virelo-Setup.exe" --clobber

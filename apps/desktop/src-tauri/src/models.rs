@@ -159,6 +159,4 @@ pub struct SearchHit {
 #[derive(Debug, Serialize)]
 pub struct AppInfo {
     pub version: String,
-    pub data_dir: String,
-    pub database_path: String,
 }
