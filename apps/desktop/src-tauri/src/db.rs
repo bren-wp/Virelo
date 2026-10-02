@@ -9,12 +9,11 @@ use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 use crate::models::{
-    Client, CompanyProfile, DashboardStats, DocumentRecord, Note, Project, SearchHit,
+    Client, CompanyProfile, DashboardStats, DocumentRecord, Note, Project,
 };
 
 pub struct AppState {
     pub conn: Mutex<Connection>,
-    pub data_dir: PathBuf,
     pub database_path: PathBuf,
     pub documents_dir: PathBuf,
 }
@@ -36,7 +35,6 @@ impl AppState {
 
         Ok(Self {
             conn: Mutex::new(conn),
-            data_dir,
             database_path,
             documents_dir,
         })
@@ -508,48 +506,6 @@ pub fn delete_document(state: &AppState, id: i64) -> Result<(), String> {
     Ok(())
 }
 
-pub fn global_search(state: &AppState, query: String) -> Result<Vec<SearchHit>, String> {
-    let query = query.trim();
-    if query.len() < 2 {
-        return Ok(Vec::new());
-    }
-
-    let pattern = format!("%{query}%");
-    let conn = lock(state)?;
-    let mut stmt = conn
-        .prepare(
-            r#"
-        SELECT 'client', id, name, COALESCE(email, '') || ' ' || COALESCE(tax_id, '')
-        FROM clients WHERE name LIKE ?1 OR email LIKE ?1 OR tax_id LIKE ?1 OR notes LIKE ?1
-        UNION ALL
-        SELECT 'project', id, name, status || ' ' || COALESCE(due_date, '')
-        FROM projects WHERE name LIKE ?1 OR notes LIKE ?1
-        UNION ALL
-        SELECT 'note', id, title, tags
-        FROM notes WHERE title LIKE ?1 OR body_markdown LIKE ?1 OR tags LIKE ?1
-        UNION ALL
-        SELECT 'document', id, title, file_name
-        FROM documents WHERE title LIKE ?1 OR file_name LIKE ?1
-        LIMIT 30
-        "#,
-        )
-        .map_err(|error| error.to_string())?;
-
-    let rows = stmt
-        .query_map([pattern], |row| {
-            Ok(SearchHit {
-                kind: row.get(0)?,
-                id: row.get(1)?,
-                title: row.get(2)?,
-                subtitle: row.get(3)?,
-            })
-        })
-        .map_err(|error| error.to_string())?;
-
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -571,7 +527,6 @@ mod tests {
         AppState {
             conn: Mutex::new(conn),
             database_path: data_dir.join("virelo-test.sqlite3"),
-            data_dir,
             documents_dir,
         }
     }
@@ -689,7 +644,7 @@ mod tests {
         )
         .expect("create finance record");
 
-        let source = state.data_dir.join("virelo-test-document.txt");
+        let source = state.documents_dir.join("virelo-test-document.txt");
         fs::write(&source, b"Virelo QA").expect("write source document");
         import_document(
             &state,
@@ -727,7 +682,11 @@ mod tests {
         assert_eq!(stats.notes, 1);
         assert_eq!(stats.documents, 1);
 
-        let data_dir = state.data_dir.clone();
+        let data_dir = state
+            .documents_dir
+            .parent()
+            .expect("test data directory")
+            .to_path_buf();
         drop(state);
         let _ = fs::remove_dir_all(data_dir);
     }
