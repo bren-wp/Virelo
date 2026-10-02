@@ -46,6 +46,24 @@ pub struct Client {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct ClientContact {
+    #[serde(default)]
+    pub id: i64,
+    pub client_id: i64,
+    #[serde(default)]
+    pub client_name: Option<String>,
+    pub name: String,
+    pub role: String,
+    pub email: String,
+    pub phone: String,
+    pub notes: String,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Project {
     #[serde(default)]
     pub id: i64,
