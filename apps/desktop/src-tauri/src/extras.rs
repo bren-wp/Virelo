@@ -914,7 +914,9 @@ pub fn export_workspace_html(state: &AppState, destination: String) -> Result<()
             html_escape(&task.due_date)
         ));
     }
-    html.push_str("</table><h2>Bilješke</h2><table><tr><th>Naslov</th><th>Oznake</th><th>Sadržaj</th></tr>");
+    html.push_str(
+        "</table><h2>Bilješke</h2><table><tr><th>Naslov</th><th>Oznake</th><th>Sadržaj</th></tr>",
+    );
     for note in notes {
         html.push_str(&format!(
             "<tr><td>{}</td><td>{}</td><td>{}</td></tr>",
@@ -924,7 +926,9 @@ pub fn export_workspace_html(state: &AppState, destination: String) -> Result<()
         ));
     }
 
-    html.push_str("</table><h2>Dokumenti</h2><table><tr><th>Naziv</th><th>Datoteka</th><th>Datum</th></tr>");
+    html.push_str(
+        "</table><h2>Dokumenti</h2><table><tr><th>Naziv</th><th>Datoteka</th><th>Datum</th></tr>",
+    );
     for document in documents {
         html.push_str(&format!(
             "<tr><td>{}</td><td>{}</td><td>{}</td></tr>",
