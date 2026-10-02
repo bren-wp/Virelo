@@ -334,7 +334,7 @@ select:focus-visible {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -374,7 +374,7 @@ select:focus-visible {
 .dashboard-grid,
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
   gap: 12px;
   margin-top: 12px;
 }
@@ -1025,4 +1025,33 @@ textarea.note-editor {
 .item-secondary {
   margin-top: 4px !important;
   color: var(--text-soft) !important;
+}
+
+
+/* Virelo 1.4 attention states and archive */
+.stat-card.attention {
+  border-color: color-mix(in srgb, var(--danger) 28%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--danger-soft) 48%, var(--bg-elevated)), var(--bg-elevated));
+}
+
+.stat-card.attention .stat-head .icon,
+.stat-card.attention .stat-value {
+  color: var(--danger);
+}
+
+.featured-export {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  background:
+    linear-gradient(150deg, color-mix(in srgb, var(--accent-soft) 72%, var(--bg-elevated)), var(--bg-elevated));
+}
+
+.featured-export .export-icon {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+}
+
+@media (max-width: 1180px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
