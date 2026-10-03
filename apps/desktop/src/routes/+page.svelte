@@ -1098,11 +1098,26 @@
   }
 
   function dateDeltaDays(value: string) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-    const target = new Date(`${value}T00:00:00`);
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return null;
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const targetDay = Date.UTC(year, month - 1, day);
+    const parsed = new Date(targetDay);
+
+    if (
+      parsed.getUTCFullYear() !== year ||
+      parsed.getUTCMonth() !== month - 1 ||
+      parsed.getUTCDate() !== day
+    ) {
+      return null;
+    }
+
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return Math.ceil((target.getTime() - today.getTime()) / 86_400_000);
+    const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.round((targetDay - today) / 86_400_000);
   }
 
   function overdueTasksCount() {
