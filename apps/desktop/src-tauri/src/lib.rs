@@ -167,23 +167,9 @@ fn import_document(
 fn update_document(
     state: State<'_, AppState>,
     id: i64,
-    title: String,
-    client_id: Option<i64>,
-    project_id: Option<i64>,
-    category: String,
-    tags: String,
-    description: String,
+    document: DocumentInput,
 ) -> Result<(), String> {
-    extras::update_document(
-        &state,
-        id,
-        title,
-        client_id,
-        project_id,
-        category,
-        tags,
-        description,
-    )
+    extras::update_document(&state, id, document)
 }
 
 #[tauri::command]
