@@ -78,12 +78,12 @@ CSV izvoz neutralizira vrijednosti koje bi tablični programi mogli protumačiti
 ## Razvoj
 
 ```bash
-npm install
+npm ci
 npm run check
 npm run build
-cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
-cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
-cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo check --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+cargo clippy --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
 ```
 
 ## Licenca
