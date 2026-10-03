@@ -160,8 +160,20 @@ fn import_document(
     title: String,
     client_id: Option<i64>,
     project_id: Option<i64>,
+    category: String,
+    tags: String,
+    description: String,
 ) -> Result<i64, String> {
-    db::import_document(&state, source_path, title, client_id, project_id)
+    db::import_document(
+        &state,
+        source_path,
+        title,
+        client_id,
+        project_id,
+        category,
+        tags,
+        description,
+    )
 }
 
 #[tauri::command]
@@ -171,8 +183,20 @@ fn update_document(
     title: String,
     client_id: Option<i64>,
     project_id: Option<i64>,
+    category: String,
+    tags: String,
+    description: String,
 ) -> Result<(), String> {
-    extras::update_document(&state, id, title, client_id, project_id)
+    extras::update_document(
+        &state,
+        id,
+        title,
+        client_id,
+        project_id,
+        category,
+        tags,
+        description,
+    )
 }
 
 #[tauri::command]
