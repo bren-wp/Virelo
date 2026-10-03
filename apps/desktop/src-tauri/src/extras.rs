@@ -14,7 +14,8 @@ use crate::{
     db::{self, AppState},
     models::{
         ActivityRecord, AppInfo, BankAccount, Client, ClientContact, CompanyProfile,
-        ContractRecord, DocumentRecord, FinanceRecord, Note, Project, SearchHit, TaskRecord,
+        ContractRecord, DocumentInput, DocumentRecord, FinanceRecord, Note, Project, SearchHit,
+        TaskRecord,
     },
 };
 
@@ -550,14 +551,9 @@ pub fn update_note(state: &AppState, note: Note) -> Result<(), String> {
 pub fn update_document(
     state: &AppState,
     id: i64,
-    title: String,
-    client_id: Option<i64>,
-    project_id: Option<i64>,
-    category: String,
-    tags: String,
-    description: String,
+    document: DocumentInput,
 ) -> Result<(), String> {
-    if id <= 0 || title.trim().is_empty() {
+    if id <= 0 || document.title.trim().is_empty() {
         return Err("Dokument nije valjan.".into());
     }
     let conn = lock(state)?;
@@ -567,16 +563,16 @@ pub fn update_document(
            WHERE id=?1"#,
         params![
             id,
-            title.trim(),
-            client_id,
-            project_id,
-            if category.trim().is_empty() {
+            document.title.trim(),
+            document.client_id,
+            document.project_id,
+            if document.category.trim().is_empty() {
                 "Ostalo"
             } else {
-                category.trim()
+                document.category.trim()
             },
-            tags.trim(),
-            description.trim()
+            document.tags.trim(),
+            document.description.trim()
         ],
     )
     .map_err(|error| error.to_string())?;
