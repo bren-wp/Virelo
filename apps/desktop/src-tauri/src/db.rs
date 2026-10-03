@@ -707,6 +707,9 @@ mod tests {
             "QA dokument".into(),
             Some(client_id),
             Some(project_id),
+            "Ugovor".into(),
+            "qa, potpisano".into(),
+            "Dokument za provjeru arhivskog modula.".into(),
         )
         .expect("import document");
 
@@ -756,7 +759,12 @@ mod tests {
         );
         assert_eq!(list_projects(&state).expect("list projects").len(), 1);
         assert_eq!(list_notes(&state).expect("list notes").len(), 1);
-        assert_eq!(list_documents(&state).expect("list documents").len(), 1);
+        let listed_documents = list_documents(&state).expect("list documents");
+        assert_eq!(listed_documents.len(), 1);
+        assert_eq!(listed_documents[0].category, "Ugovor");
+        assert_eq!(listed_documents[0].client_name.as_deref(), Some("Test klijent"));
+        assert_eq!(listed_documents[0].project_name.as_deref(), Some("Virelo QA projekt"));
+        assert!(listed_documents[0].tags.contains("potpisano"));
         assert_eq!(extras::list_tasks(&state).expect("list tasks").len(), 1);
         assert_eq!(
             extras::list_activities(&state)
@@ -785,6 +793,10 @@ mod tests {
         let contract_search =
             extras::global_search(&state, "QA ugovor".into()).expect("contract search");
         assert!(contract_search.iter().any(|hit| hit.kind == "contract"));
+
+        let document_search =
+            extras::global_search(&state, "potpisano".into()).expect("document metadata search");
+        assert!(document_search.iter().any(|hit| hit.kind == "document"));
 
         let export_root = state
             .documents_dir
@@ -824,9 +836,9 @@ mod tests {
         assert!(fs::read_to_string(md_path)
             .expect("read markdown")
             .contains("Ana Test"));
-        assert!(fs::read_to_string(html_path)
-            .expect("read html")
-            .contains("Virelo QA ugovor"));
+        let html_export = fs::read_to_string(html_path).expect("read html");
+        assert!(html_export.contains("Virelo QA ugovor"));
+        assert!(html_export.contains("potpisano"));
         assert!(fs::read_to_string(yaml_path)
             .expect("read yaml")
             .contains("Glavni račun"));
