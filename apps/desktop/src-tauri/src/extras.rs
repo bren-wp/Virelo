@@ -913,7 +913,6 @@ pub fn export_workspace_xml(state: &AppState, destination: String) -> Result<(),
     fs::write(destination, xml).map_err(|error| error.to_string())
 }
 
-
 const MAX_ARCHIVE_MANIFEST_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_ARCHIVE_DATABASE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_ARCHIVE_DOCUMENT_BYTES: u64 = 512 * 1024 * 1024;
@@ -947,7 +946,9 @@ fn validate_restore_database(database_path: &Path, documents_dir: &Path) -> Resu
         .query_row("PRAGMA quick_check(1)", [], |row| row.get(0))
         .map_err(|error| error.to_string())?;
     if quick_check != "ok" {
-        return Err(format!("Sigurnosna kopija baze nije ispravna: {quick_check}"));
+        return Err(format!(
+            "Sigurnosna kopija baze nije ispravna: {quick_check}"
+        ));
     }
 
     // Starije Virelo kopije mogu nemati module dodane kasnijim migracijama.
@@ -980,7 +981,9 @@ fn validate_restore_database(database_path: &Path, documents_dir: &Path) -> Resu
         .prepare("SELECT id, file_path FROM documents ORDER BY id")
         .map_err(|error| error.to_string())?;
     let document_paths = stmt
-        .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })
         .map_err(|error| error.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
@@ -1095,8 +1098,7 @@ fn extract_workspace_archive(
 
     if manifest_entries != 1 || database_entries != 1 {
         return Err(
-            "Arhiva nije valjana: očekuje se točno jedan virelo-data.json i virelo.sqlite3."
-                .into(),
+            "Arhiva nije valjana: očekuje se točno jedan virelo-data.json i virelo.sqlite3.".into(),
         );
     }
 
@@ -1125,8 +1127,7 @@ fn extract_workspace_archive(
         if database.size() == 0 || database.size() > MAX_ARCHIVE_DATABASE_BYTES {
             return Err("Baza u Virelo arhivi ima nedopuštenu veličinu.".into());
         }
-        let mut output =
-            fs::File::create(staging_database).map_err(|error| error.to_string())?;
+        let mut output = fs::File::create(staging_database).map_err(|error| error.to_string())?;
         let copied = std::io::copy(
             &mut database.take(MAX_ARCHIVE_DATABASE_BYTES + 1),
             &mut output,
@@ -1154,7 +1155,9 @@ fn extract_workspace_archive(
             return Err(format!("Arhiva sadrži dupliciranu datoteku: {file_name}."));
         }
         if entry.size() > MAX_ARCHIVE_DOCUMENT_BYTES {
-            return Err(format!("Dokument {file_name} je prevelik za siguran povrat."));
+            return Err(format!(
+                "Dokument {file_name} je prevelik za siguran povrat."
+            ));
         }
         total_document_bytes = total_document_bytes
             .checked_add(entry.size())
@@ -1229,10 +1232,7 @@ pub fn restore_workspace_archive(state: &AppState, source: String) -> Result<(),
     result
 }
 
-pub fn restore_database(
-    state: &AppState,
-    source: String,
-) -> Result<(), String> {
+pub fn restore_database(state: &AppState, source: String) -> Result<(), String> {
     let source = PathBuf::from(source);
     if !source.is_file() {
         return Err("Odabrana sigurnosna kopija baze ne postoji.".into());
@@ -1991,7 +1991,6 @@ pub fn global_search(state: &AppState, query: String) -> Result<Vec<SearchHit>, 
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())
 }
-
 
 #[cfg(test)]
 mod restore_security_tests {
