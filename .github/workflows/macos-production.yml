@@ -31,18 +31,26 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
+
+      - name: Verify version consistency
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(node scripts/verify-version.mjs)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Virelo version: $VERSION"
 
       - name: Install dependencies
         run: npm ci
@@ -100,32 +108,57 @@ jobs:
           EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
 
           test "$BUNDLE_ID" = "com.virelo.desktop" || { echo "Unexpected bundle identifier: $BUNDLE_ID"; exit 1; }
-          test "$VERSION" = "1.8.0" || { echo "Unexpected bundle version: $VERSION"; exit 1; }
+          test "$VERSION" = "${{ steps.version.outputs.version }}" || { echo "Unexpected bundle version: $VERSION"; exit 1; }
           test -x "$APP_PATH/Contents/MacOS/$EXECUTABLE" || { echo "App executable is missing."; exit 1; }
 
           mkdir -p artifacts
           cp "$DMG_PATH" "artifacts/Virelo-macOS-${{ matrix.arch }}.dmg"
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "artifacts/Virelo-macOS-${{ matrix.arch }}-app.zip"
+          hdiutil verify "artifacts/Virelo-macOS-${{ matrix.arch }}.dmg"
           ls -lh artifacts
+
+      - name: macOS application launch smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE_ROOT="apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
+          APP_PATH="$(find "$BUNDLE_ROOT/macos" -maxdepth 1 -type d -name '*.app' -print -quit)"
+          EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
+          LOG="$RUNNER_TEMP/virelo-macos-${{ matrix.arch }}-smoke.log"
+
+          "$APP_PATH/Contents/MacOS/$EXECUTABLE" >"$LOG" 2>&1 &
+          PID=$!
+          sleep 8
+
+          if ! kill -0 "$PID" 2>/dev/null; then
+            cat "$LOG"
+            wait "$PID" || true
+            echo "Virelo macOS application exited during launch smoke test."
+            exit 1
+          fi
+
+          kill "$PID"
+          wait "$PID" || true
+          echo "macOS ${{ matrix.arch }} launch smoke test passed."
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Virelo-macOS-${{ matrix.arch }}-1.8.0
+          name: Virelo-macOS-${{ matrix.arch }}-${{ steps.version.outputs.version }}
           path: |
             artifacts/Virelo-macOS-${{ matrix.arch }}.dmg
             artifacts/Virelo-macOS-${{ matrix.arch }}-app.zip
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish macOS assets to v1.8.0 release
+      - name: Publish macOS assets to release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="v1.8.0"
+          TAG="v${{ steps.version.outputs.version }}"
           FOUND=0
           for _ in {1..60}; do
             if gh release view "$TAG" >/dev/null 2>&1; then
