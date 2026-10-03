@@ -485,7 +485,11 @@ pub fn import_document(
             destination_text,
             client_id,
             project_id,
-            if category.trim().is_empty() { "Ostalo" } else { category.trim() },
+            if category.trim().is_empty() {
+                "Ostalo"
+            } else {
+                category.trim()
+            },
             tags.trim(),
             description.trim()
         ],
@@ -762,8 +766,14 @@ mod tests {
         let listed_documents = list_documents(&state).expect("list documents");
         assert_eq!(listed_documents.len(), 1);
         assert_eq!(listed_documents[0].category, "Ugovor");
-        assert_eq!(listed_documents[0].client_name.as_deref(), Some("Test klijent"));
-        assert_eq!(listed_documents[0].project_name.as_deref(), Some("Virelo QA projekt"));
+        assert_eq!(
+            listed_documents[0].client_name.as_deref(),
+            Some("Test klijent")
+        );
+        assert_eq!(
+            listed_documents[0].project_name.as_deref(),
+            Some("Virelo QA projekt")
+        );
         assert!(listed_documents[0].tags.contains("potpisano"));
         assert_eq!(extras::list_tasks(&state).expect("list tasks").len(), 1);
         assert_eq!(
