@@ -2,7 +2,7 @@
 
 **Virelo** je desktop poslovni sustav za organizaciju podataka firme, klijenata, kontakt-osoba, projekata, zadataka, bilješki, dokumenata, aktivnosti i financijske evidencije.
 
-## Virelo 1.3
+## Virelo 1.7
 
 Virelo objedinjuje:
 
@@ -35,6 +35,17 @@ Produkcijski pipeline provjerava:
 - Windows PE zaglavlje
 - Windows GUI subsystem, kako se uz aplikaciju ne bi otvarao konzolni prozor
 - stvarno pokretanje Portable EXE-a kao launch smoke test
+
+## Podržane platforme
+
+Produkcijski buildovi održavaju jednake poslovne funkcije na podržanim desktop platformama:
+
+- **Windows** — `Virelo-Setup.exe` i `Virelo-Portable.exe`
+- **macOS Apple Silicon** — `Virelo-macOS-arm64.dmg` i `Virelo-macOS-arm64-app.zip`
+- **macOS Intel** — `Virelo-macOS-x64.dmg` i `Virelo-macOS-x64-app.zip`
+- **Linux** — `Virelo.AppImage` i `virelo.deb`
+
+macOS build ostaje unsigned kada signing certifikat nije konfiguriran. Workflow je pripremljen tako da signing/notarization podaci mogu biti dodani kroz GitHub Secrets bez blokiranja unsigned builda.
 
 ## Izvoz podataka
 
