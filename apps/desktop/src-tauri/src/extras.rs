@@ -1081,15 +1081,15 @@ pub fn export_workspace_csv(state: &AppState, destination: String) -> Result<(),
                 csv_cell("dokument"),
                 csv_cell(&document.id.to_string()),
                 csv_cell(&document.title),
-                csv_cell(""),
-                csv_cell(&document.file_name),
+                csv_cell(document.client_name.as_deref().unwrap_or("")),
+                csv_cell(&document.category),
                 csv_cell(&document.created_at),
                 csv_cell(""),
                 csv_cell(""),
-                csv_cell(""),
-                csv_cell(""),
-                csv_cell(""),
-                csv_cell(""),
+                csv_cell(&document.file_name),
+                csv_cell(document.project_name.as_deref().unwrap_or("")),
+                csv_cell(&document.tags),
+                csv_cell(&document.description),
             ]
             .join(","),
         );
@@ -1255,8 +1255,22 @@ pub fn export_workspace_markdown(state: &AppState, destination: String) -> Resul
     md.push_str("## Dokumenti\n\n");
     for document in db::list_documents(state)? {
         md.push_str(&format!(
-            "- **{}** · {} · {}\n",
-            document.title, document.file_name, document.created_at
+            "- **{}** · {} · {} · {}{}{}\n  {}\n",
+            document.title,
+            document.category,
+            document.file_name,
+            document.created_at,
+            document
+                .client_name
+                .as_deref()
+                .map(|name| format!(" · klijent: {name}"))
+                .unwrap_or_default(),
+            if document.tags.is_empty() {
+                String::new()
+            } else {
+                format!(" · oznake: {}", document.tags)
+            },
+            document.description
         ));
     }
 
@@ -1392,13 +1406,18 @@ pub fn export_workspace_html(state: &AppState, destination: String) -> Result<()
     }
 
     html.push_str(
-        "</table><h2>Dokumenti</h2><table><tr><th>Naziv</th><th>Datoteka</th><th>Datum</th></tr>",
+        "</table><h2>Dokumenti</h2><table><tr><th>Naziv</th><th>Kategorija</th><th>Klijent</th><th>Projekt</th><th>Oznake</th><th>Datoteka</th><th>Opis</th><th>Datum</th></tr>",
     );
     for document in documents {
         html.push_str(&format!(
-            "<tr><td>{}</td><td>{}</td><td>{}</td></tr>",
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
             html_escape(&document.title),
+            html_escape(&document.category),
+            html_escape(document.client_name.as_deref().unwrap_or("")),
+            html_escape(document.project_name.as_deref().unwrap_or("")),
+            html_escape(&document.tags),
             html_escape(&document.file_name),
+            html_escape(&document.description),
             html_escape(&document.created_at)
         ));
     }
@@ -1579,8 +1598,15 @@ pub fn global_search(state: &AppState, query: String) -> Result<Vec<SearchHit>, 
             SELECT 'note', id, title, tags
             FROM notes WHERE title LIKE ?1 OR body_markdown LIKE ?1 OR tags LIKE ?1
             UNION ALL
-            SELECT 'document', id, title, file_name
-            FROM documents WHERE title LIKE ?1 OR file_name LIKE ?1
+            SELECT 'document', d.id, d.title,
+                   d.category || ' ' || d.file_name || ' ' ||
+                   COALESCE(c.name, '') || ' ' || COALESCE(p.name, '')
+            FROM documents d
+            LEFT JOIN clients c ON c.id=d.client_id
+            LEFT JOIN projects p ON p.id=d.project_id
+            WHERE d.title LIKE ?1 OR d.file_name LIKE ?1 OR d.category LIKE ?1
+               OR d.tags LIKE ?1 OR d.description LIKE ?1
+               OR c.name LIKE ?1 OR p.name LIKE ?1
             UNION ALL
             SELECT 'task', id, title, status || ' ' || priority
             FROM tasks WHERE title LIKE ?1 OR notes LIKE ?1
