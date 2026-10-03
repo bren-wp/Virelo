@@ -119,6 +119,9 @@ fn migrate(conn: &Connection) -> Result<(), String> {
             file_path TEXT NOT NULL UNIQUE,
             client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
             project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+            category TEXT NOT NULL DEFAULT 'Ostalo',
+            tags TEXT NOT NULL DEFAULT '',
+            description TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -410,8 +413,12 @@ pub fn list_documents(state: &AppState) -> Result<Vec<DocumentRecord>, String> {
     let conn = lock(state)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, file_name, file_path, client_id, project_id, created_at
-         FROM documents ORDER BY created_at DESC, id DESC",
+            "SELECT d.id, d.title, d.file_name, d.file_path, d.client_id, c.name,
+                    d.project_id, p.name, d.category, d.tags, d.description, d.created_at
+             FROM documents d
+             LEFT JOIN clients c ON c.id = d.client_id
+             LEFT JOIN projects p ON p.id = d.project_id
+             ORDER BY d.created_at DESC, d.id DESC",
         )
         .map_err(|error| error.to_string())?;
 
@@ -423,8 +430,13 @@ pub fn list_documents(state: &AppState) -> Result<Vec<DocumentRecord>, String> {
                 file_name: row.get(2)?,
                 file_path: row.get(3)?,
                 client_id: row.get(4)?,
-                project_id: row.get(5)?,
-                created_at: row.get(6)?,
+                client_name: row.get(5)?,
+                project_id: row.get(6)?,
+                project_name: row.get(7)?,
+                category: row.get(8)?,
+                tags: row.get(9)?,
+                description: row.get(10)?,
+                created_at: row.get(11)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -439,6 +451,9 @@ pub fn import_document(
     title: String,
     client_id: Option<i64>,
     project_id: Option<i64>,
+    category: String,
+    tags: String,
+    description: String,
 ) -> Result<i64, String> {
     let source = Path::new(&source_path);
     if !source.is_file() {
@@ -457,8 +472,9 @@ pub fn import_document(
     let conn = lock(state)?;
     let destination_text = destination.to_string_lossy().to_string();
     let result = conn.execute(
-        "INSERT INTO documents (title, file_name, file_path, client_id, project_id)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+        "INSERT INTO documents
+         (title, file_name, file_path, client_id, project_id, category, tags, description)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             if title.trim().is_empty() {
                 file_name
@@ -468,7 +484,10 @@ pub fn import_document(
             file_name,
             destination_text,
             client_id,
-            project_id
+            project_id,
+            if category.trim().is_empty() { "Ostalo" } else { category.trim() },
+            tags.trim(),
+            description.trim()
         ],
     );
 
