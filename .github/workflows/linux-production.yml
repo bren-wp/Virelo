@@ -1,0 +1,91 @@
+name: Linux Production Build
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  linux-production:
+    name: Linux AppImage and DEB
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Frontend validation
+        run: npm run check
+
+      - name: Build Linux bundles
+        run: npm --workspace @virelo/desktop run tauri -- build --bundles appimage,deb
+
+      - name: Collect and verify Linux artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          APPIMAGE="$(find apps/desktop/src-tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage' -print -quit)"
+          DEB="$(find apps/desktop/src-tauri/target/release/bundle/deb -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          test -n "$APPIMAGE" || { echo "AppImage was not produced."; exit 1; }
+          test -n "$DEB" || { echo "DEB was not produced."; exit 1; }
+          test -s "$APPIMAGE" || { echo "AppImage is empty."; exit 1; }
+          test -s "$DEB" || { echo "DEB is empty."; exit 1; }
+          dpkg-deb --info "$DEB" >/dev/null
+
+          mkdir -p artifacts
+          cp "$APPIMAGE" "artifacts/Virelo.AppImage"
+          cp "$DEB" "artifacts/virelo.deb"
+          chmod +x "artifacts/Virelo.AppImage"
+          ls -lh artifacts
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Virelo-Linux-1.7.0
+          path: |
+            artifacts/Virelo.AppImage
+            artifacts/virelo.deb
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish Linux assets to v1.7.0 release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="v1.7.0"
+          FOUND=0
+          for _ in {1..60}; do
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              FOUND=1
+              break
+            fi
+            sleep 10
+          done
+          test "$FOUND" = "1" || { echo "Release $TAG was not created by the Windows production workflow."; exit 1; }
+          gh release upload "$TAG" "artifacts/Virelo.AppImage" "artifacts/virelo.deb" --clobber
