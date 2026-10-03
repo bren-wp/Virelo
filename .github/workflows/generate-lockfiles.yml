@@ -1,0 +1,58 @@
+name: Generate Production Lockfiles
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - package.json
+      - apps/desktop/package.json
+      - apps/desktop/src-tauri/Cargo.toml
+      - .github/workflows/generate-lockfiles.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: virelo-lockfiles-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  lockfiles:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout pull request branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Generate lockfiles
+        run: |
+          npm install --package-lock-only --ignore-scripts
+          cargo generate-lockfile --manifest-path apps/desktop/src-tauri/Cargo.toml
+
+      - name: Commit generated lockfiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add package-lock.json apps/desktop/src-tauri/Cargo.lock
+          if git diff --cached --quiet; then
+            echo "Lockfiles are already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Lock production dependencies"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
