@@ -6,6 +6,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: write
 
@@ -41,7 +45,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Frontend validation
         run: npm run check
@@ -96,7 +100,7 @@ jobs:
           EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Contents/Info.plist")"
 
           test "$BUNDLE_ID" = "com.virelo.desktop" || { echo "Unexpected bundle identifier: $BUNDLE_ID"; exit 1; }
-          test "$VERSION" = "1.7.0" || { echo "Unexpected bundle version: $VERSION"; exit 1; }
+          test "$VERSION" = "1.8.0" || { echo "Unexpected bundle version: $VERSION"; exit 1; }
           test -x "$APP_PATH/Contents/MacOS/$EXECUTABLE" || { echo "App executable is missing."; exit 1; }
 
           mkdir -p artifacts
@@ -107,21 +111,21 @@ jobs:
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Virelo-macOS-${{ matrix.arch }}-1.7.0
+          name: Virelo-macOS-${{ matrix.arch }}-1.8.0
           path: |
             artifacts/Virelo-macOS-${{ matrix.arch }}.dmg
             artifacts/Virelo-macOS-${{ matrix.arch }}-app.zip
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish macOS assets to v1.7.0 release
+      - name: Publish macOS assets to v1.8.0 release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="v1.7.0"
+          TAG="v1.8.0"
           FOUND=0
           for _ in {1..60}; do
             if gh release view "$TAG" >/dev/null 2>&1; then

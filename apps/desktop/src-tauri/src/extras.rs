@@ -1,14 +1,17 @@
 use std::{
+    collections::HashSet,
+    ffi::OsStr,
     fs,
     io::{Read, Write},
-    path::Path,
+    path::{Component, Path, PathBuf},
     sync::MutexGuard,
+    time::Duration,
 };
 
-use rusqlite::{params, Connection};
+use rusqlite::{backup::Backup, params, Connection};
 use serde::Serialize;
 use serde_json::json;
-use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
+use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::{
     db::{self, AppState},
@@ -910,8 +913,376 @@ pub fn export_workspace_xml(state: &AppState, destination: String) -> Result<(),
     fs::write(destination, xml).map_err(|error| error.to_string())
 }
 
+const MAX_ARCHIVE_MANIFEST_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_ARCHIVE_DATABASE_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_ARCHIVE_DOCUMENT_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_ARCHIVE_TOTAL_DOCUMENT_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+
+fn archive_document_file_name(name: &str) -> Option<String> {
+    let path = Path::new(name);
+    let mut components = path.components();
+    match (components.next(), components.next(), components.next()) {
+        (Some(Component::Normal(root)), Some(Component::Normal(file)), None)
+            if root == OsStr::new("documents") =>
+        {
+            let file = file.to_str()?.trim();
+            if file.is_empty() {
+                None
+            } else {
+                Some(file.to_string())
+            }
+        }
+        _ => None,
+    }
+}
+
+fn validate_restore_database(database_path: &Path, documents_dir: &Path) -> Result<(), String> {
+    if !database_path.is_file() {
+        return Err("Virelo baza nije pronađena u sigurnosnoj kopiji.".into());
+    }
+
+    let conn = Connection::open(database_path).map_err(|error| error.to_string())?;
+    let quick_check: String = conn
+        .query_row("PRAGMA quick_check(1)", [], |row| row.get(0))
+        .map_err(|error| error.to_string())?;
+    if quick_check != "ok" {
+        return Err(format!(
+            "Sigurnosna kopija baze nije ispravna: {quick_check}"
+        ));
+    }
+
+    // Starije Virelo kopije mogu nemati module dodane kasnijim migracijama.
+    // Za valjan restore zahtijevamo samo jezgru koja postoji od prvog izdanja,
+    // a trenutne migracije nakon povrata dodaju novije tablice i stupce.
+    for table in [
+        "company_profile",
+        "clients",
+        "projects",
+        "notes",
+        "documents",
+    ] {
+        let exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+                [table],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        if exists != 1 {
+            return Err(format!("Sigurnosna kopija nema obaveznu tablicu: {table}."));
+        }
+    }
+
+    let mut foreign_keys = conn
+        .prepare("PRAGMA foreign_key_check")
+        .map_err(|error| error.to_string())?;
+    let mut rows = foreign_keys.query([]).map_err(|error| error.to_string())?;
+    if rows.next().map_err(|error| error.to_string())?.is_some() {
+        return Err("Sigurnosna kopija sadrži neispravne relacije podataka.".into());
+    }
+    drop(rows);
+    drop(foreign_keys);
+
+    let mut stmt = conn
+        .prepare("SELECT id, file_path FROM documents ORDER BY id")
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|error| error.to_string())?;
+    let document_paths = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+
+    for (id, file_path) in document_paths {
+        let stored_name = Path::new(&file_path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| !name.is_empty())
+            .ok_or_else(|| format!("Dokument #{id} u bazi nema valjanu putanju."))?;
+        if !documents_dir.join(stored_name).is_file() {
+            return Err(format!(
+                "Sigurnosna kopija nema datoteku dokumenta #{id}: {stored_name}."
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn copy_database(source: &Connection, destination: &mut Connection) -> Result<(), String> {
+    let backup = Backup::new(source, destination).map_err(|error| error.to_string())?;
+    backup
+        .run_to_completion(32, Duration::from_millis(20), None)
+        .map_err(|error| error.to_string())
+}
+
+fn backup_live_database(state: &AppState, destination: &Path) -> Result<(), String> {
+    let conn = lock(state)?;
+    conn.execute_batch("PRAGMA wal_checkpoint(FULL);")
+        .map_err(|error| error.to_string())?;
+
+    let mut backup_conn = Connection::open(destination).map_err(|error| error.to_string())?;
+    copy_database(&conn, &mut backup_conn)
+}
+
+fn rewrite_document_paths(conn: &mut Connection, documents_dir: &Path) -> Result<(), String> {
+    let document_paths = {
+        let mut stmt = conn
+            .prepare("SELECT id, file_path FROM documents ORDER BY id")
+            .map_err(|error| error.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?
+    };
+
+    let tx = conn.transaction().map_err(|error| error.to_string())?;
+    for (id, old_path) in document_paths {
+        let stored_name = Path::new(&old_path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| !name.is_empty())
+            .ok_or_else(|| format!("Dokument #{id} nema valjanu putanju."))?;
+        let current_path = documents_dir.join(stored_name);
+        if !current_path.is_file() {
+            return Err(format!(
+                "Datoteka dokumenta #{id} nije pronađena nakon povrata podataka."
+            ));
+        }
+        tx.execute(
+            "UPDATE documents SET file_path=?2 WHERE id=?1",
+            params![id, current_path.to_string_lossy().to_string()],
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    tx.commit().map_err(|error| error.to_string())
+}
+
+fn apply_database_restore(state: &AppState, source_database: &Path) -> Result<(), String> {
+    let source = Connection::open(source_database).map_err(|error| error.to_string())?;
+    let mut target = lock(state)?;
+    target
+        .execute_batch("PRAGMA wal_checkpoint(FULL);")
+        .map_err(|error| error.to_string())?;
+    copy_database(&source, &mut target)?;
+    db::configure_database(&target)?;
+    db::migrate(&target)?;
+    migrate(&target)?;
+    rewrite_document_paths(&mut target, &state.documents_dir)
+}
+
+fn restore_database_backup(state: &AppState, backup_database: &Path) -> Result<(), String> {
+    let source = Connection::open(backup_database).map_err(|error| error.to_string())?;
+    let mut target = lock(state)?;
+    copy_database(&source, &mut target)?;
+    db::configure_database(&target)?;
+    db::migrate(&target)?;
+    migrate(&target)?;
+    Ok(())
+}
+
+fn extract_workspace_archive(
+    archive_path: &Path,
+    staging_database: &Path,
+    staging_documents: &Path,
+) -> Result<(), String> {
+    let source = fs::File::open(archive_path).map_err(|error| error.to_string())?;
+    let mut archive = ZipArchive::new(source).map_err(|error| error.to_string())?;
+
+    let mut manifest_entries = 0usize;
+    let mut database_entries = 0usize;
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        match entry.name() {
+            "virelo-data.json" => manifest_entries += 1,
+            "virelo.sqlite3" => database_entries += 1,
+            _ => {}
+        }
+    }
+
+    if manifest_entries != 1 || database_entries != 1 {
+        return Err(
+            "Arhiva nije valjana: očekuje se točno jedan virelo-data.json i virelo.sqlite3.".into(),
+        );
+    }
+
+    {
+        let mut manifest = archive
+            .by_name("virelo-data.json")
+            .map_err(|_| "Arhiva nema virelo-data.json.".to_string())?;
+        if manifest.size() == 0 || manifest.size() > MAX_ARCHIVE_MANIFEST_BYTES {
+            return Err("Manifest Virelo arhive ima nedopuštenu veličinu.".into());
+        }
+        let mut data = String::new();
+        manifest
+            .read_to_string(&mut data)
+            .map_err(|error| error.to_string())?;
+        let json: serde_json::Value =
+            serde_json::from_str(&data).map_err(|_| "Manifest Virelo arhive nije valjan JSON.")?;
+        if json.get("format").and_then(|value| value.as_str()) != Some("virelo-archive") {
+            return Err("Odabrana ZIP datoteka nije Virelo arhiva.".into());
+        }
+    }
+
+    {
+        let database = archive
+            .by_name("virelo.sqlite3")
+            .map_err(|_| "Arhiva nema virelo.sqlite3.".to_string())?;
+        if database.size() == 0 || database.size() > MAX_ARCHIVE_DATABASE_BYTES {
+            return Err("Baza u Virelo arhivi ima nedopuštenu veličinu.".into());
+        }
+        let mut output = fs::File::create(staging_database).map_err(|error| error.to_string())?;
+        let copied = std::io::copy(
+            &mut database.take(MAX_ARCHIVE_DATABASE_BYTES + 1),
+            &mut output,
+        )
+        .map_err(|error| error.to_string())?;
+        if copied > MAX_ARCHIVE_DATABASE_BYTES {
+            return Err("Baza u Virelo arhivi prelazi dopuštenu veličinu.".into());
+        }
+    }
+
+    fs::create_dir_all(staging_documents).map_err(|error| error.to_string())?;
+    let mut seen = HashSet::new();
+    let mut total_document_bytes = 0u64;
+
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        let name = entry.name().to_string();
+        if entry.is_dir() || !name.starts_with("documents/") {
+            continue;
+        }
+
+        let file_name = archive_document_file_name(&name)
+            .ok_or_else(|| format!("Nedopuštena putanja dokumenta u arhivi: {name}"))?;
+        if !seen.insert(file_name.clone()) {
+            return Err(format!("Arhiva sadrži dupliciranu datoteku: {file_name}."));
+        }
+        if entry.size() > MAX_ARCHIVE_DOCUMENT_BYTES {
+            return Err(format!(
+                "Dokument {file_name} je prevelik za siguran povrat."
+            ));
+        }
+        total_document_bytes = total_document_bytes
+            .checked_add(entry.size())
+            .ok_or_else(|| "Ukupna veličina dokumenata nije valjana.".to_string())?;
+        if total_document_bytes > MAX_ARCHIVE_TOTAL_DOCUMENT_BYTES {
+            return Err("Arhiva sadrži previše podataka za siguran povrat.".into());
+        }
+
+        let destination = staging_documents.join(&file_name);
+        let mut output = fs::File::create(destination).map_err(|error| error.to_string())?;
+        let copied = std::io::copy(&mut entry.take(MAX_ARCHIVE_DOCUMENT_BYTES + 1), &mut output)
+            .map_err(|error| error.to_string())?;
+        if copied > MAX_ARCHIVE_DOCUMENT_BYTES {
+            return Err(format!("Dokument {file_name} prelazi dopuštenu veličinu."));
+        }
+    }
+
+    validate_restore_database(staging_database, staging_documents)
+}
+
+pub fn restore_workspace_archive(state: &AppState, source: String) -> Result<(), String> {
+    let source = PathBuf::from(source);
+    if !source.is_file() {
+        return Err("Odabrana Virelo arhiva ne postoji.".into());
+    }
+
+    let data_dir = state
+        .database_path
+        .parent()
+        .ok_or_else(|| "Mapa Virelo podataka nije dostupna.".to_string())?;
+    let restore_id = uuid::Uuid::new_v4();
+    let staging_root = data_dir.join(format!(".virelo-restore-stage-{restore_id}"));
+    let staging_database = staging_root.join("virelo.sqlite3");
+    let staging_documents = staging_root.join("documents");
+    let backup_root = data_dir.join(format!(".virelo-restore-backup-{restore_id}"));
+    let backup_database = backup_root.join("virelo.sqlite3");
+    let backup_documents = backup_root.join("documents");
+
+    fs::create_dir_all(&staging_root).map_err(|error| error.to_string())?;
+    fs::create_dir_all(&backup_root).map_err(|error| error.to_string())?;
+
+    let result = (|| -> Result<(), String> {
+        extract_workspace_archive(&source, &staging_database, &staging_documents)?;
+        backup_live_database(state, &backup_database)?;
+
+        fs::rename(&state.documents_dir, &backup_documents).map_err(|error| error.to_string())?;
+        if let Err(error) = fs::rename(&staging_documents, &state.documents_dir) {
+            let _ = fs::rename(&backup_documents, &state.documents_dir);
+            return Err(error.to_string());
+        }
+
+        if let Err(error) = apply_database_restore(state, &staging_database) {
+            let _ = fs::remove_dir_all(&state.documents_dir);
+            let _ = fs::rename(&backup_documents, &state.documents_dir);
+            let rollback = restore_database_backup(state, &backup_database);
+            return match rollback {
+                Ok(()) => Err(error),
+                Err(rollback_error) => Err(format!(
+                    "{error} Povrat prethodnog stanja nije uspio: {rollback_error}"
+                )),
+            };
+        }
+
+        Ok(())
+    })();
+
+    let _ = fs::remove_dir_all(&staging_root);
+    let _ = fs::remove_dir_all(&backup_root);
+    result
+}
+
+pub fn restore_database(state: &AppState, source: String) -> Result<(), String> {
+    let source = PathBuf::from(source);
+    if !source.is_file() {
+        return Err("Odabrana sigurnosna kopija baze ne postoji.".into());
+    }
+    if source == state.database_path {
+        return Err("Odaberi sigurnosnu kopiju izvan aktivne Virelo baze.".into());
+    }
+
+    validate_restore_database(&source, &state.documents_dir)?;
+
+    let data_dir = state
+        .database_path
+        .parent()
+        .ok_or_else(|| "Mapa Virelo podataka nije dostupna.".to_string())?;
+    let backup_root = data_dir.join(format!(".virelo-db-restore-{}", uuid::Uuid::new_v4()));
+    let backup_database = backup_root.join("virelo.sqlite3");
+    fs::create_dir_all(&backup_root).map_err(|error| error.to_string())?;
+    backup_live_database(state, &backup_database)?;
+
+    let result = match apply_database_restore(state, &source) {
+        Ok(()) => Ok(()),
+        Err(error) => match restore_database_backup(state, &backup_database) {
+            Ok(()) => Err(error),
+            Err(rollback_error) => Err(format!(
+                "{error} Povrat prethodnog stanja nije uspio: {rollback_error}"
+            )),
+        },
+    };
+
+    let _ = fs::remove_dir_all(backup_root);
+    result
+}
+
 fn csv_cell(value: &str) -> String {
-    let escaped = value.replace('"', "\"\"");
+    let dangerous_formula = matches!(
+        value.trim_start().chars().next(),
+        Some('=') | Some('+') | Some('-') | Some('@')
+    );
+    let safe = if dangerous_formula {
+        format!("'{value}")
+    } else {
+        value.to_string()
+    };
+    let escaped = safe.replace('"', "\"\"");
     format!("\"{escaped}\"")
 }
 
@@ -1553,15 +1924,7 @@ pub fn backup_database(state: &AppState, destination: String) -> Result<(), Stri
         return Err("Backup mora biti spremljen na drugu lokaciju.".into());
     }
 
-    {
-        let conn = lock(state)?;
-        conn.execute_batch("PRAGMA wal_checkpoint(FULL);")
-            .map_err(|error| error.to_string())?;
-    }
-
-    fs::copy(&state.database_path, destination)
-        .map(|_| ())
-        .map_err(|error| error.to_string())
+    backup_live_database(state, destination)
 }
 
 pub fn global_search(state: &AppState, query: String) -> Result<Vec<SearchHit>, String> {
@@ -1633,4 +1996,28 @@ pub fn global_search(state: &AppState, query: String) -> Result<Vec<SearchHit>, 
 
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod restore_security_tests {
+    use super::*;
+
+    #[test]
+    fn rejects_archive_path_traversal() {
+        assert_eq!(
+            archive_document_file_name("documents/contract.pdf"),
+            Some("contract.pdf".to_string())
+        );
+        assert_eq!(archive_document_file_name("documents/../evil.txt"), None);
+        assert_eq!(archive_document_file_name("../documents/evil.txt"), None);
+        assert_eq!(archive_document_file_name("documents/sub/file.txt"), None);
+    }
+
+    #[test]
+    fn protects_csv_cells_from_formula_injection() {
+        assert_eq!(csv_cell("=2+2"), "\"'=2+2\"");
+        assert_eq!(csv_cell(" +SUM(A1:A2)"), "\"' +SUM(A1:A2)\"");
+        assert_eq!(csv_cell("@cmd"), "\"'@cmd\"");
+        assert_eq!(csv_cell("Virelo"), "\"Virelo\"");
+    }
 }

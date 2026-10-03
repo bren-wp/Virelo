@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Virelo",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "identifier": "com.virelo.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -28,7 +28,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: https://asset.localhost; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; style-src 'self'; img-src 'self' data: asset: https://asset.localhost; connect-src ipc: http://ipc.localhost"
     }
   },
   "bundle": {

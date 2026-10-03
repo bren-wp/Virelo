@@ -125,5 +125,7 @@ export const api = {
   exportXml: (destination: string) => invoke<void>('export_workspace_xml', { destination }),
   exportArchive: (destination: string) => invoke<void>('export_workspace_archive', { destination }),
   backupDatabase: (destination: string) => invoke<void>('backup_database', { destination }),
+  restoreArchive: (source: string) => invoke<void>('restore_workspace_archive', { source }),
+  restoreDatabase: (source: string) => invoke<void>('restore_database', { source }),
   search: (query: string) => invoke<SearchHit[]>('global_search', { query })
 };
