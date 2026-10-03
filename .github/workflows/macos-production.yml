@@ -142,7 +142,7 @@ jobs:
           echo "macOS ${{ matrix.arch }} launch smoke test passed."
 
       - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Virelo-macOS-${{ matrix.arch }}-${{ steps.version.outputs.version }}
           path: |
