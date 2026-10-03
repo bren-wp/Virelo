@@ -976,6 +976,26 @@
     }
   }
 
+  function clientRelationStats(clientId: number) {
+    return {
+      contacts: contacts.filter((contact) => contact.client_id === clientId).length,
+      projects: projects.filter((project) => project.client_id === clientId).length,
+      contracts: contracts.filter((contract) => contract.client_id === clientId).length,
+      documents: documents.filter((document) => document.client_id === clientId).length
+    };
+  }
+
+  function projectRelationStats(projectId: number) {
+    return {
+      openTasks: tasks.filter(
+        (task) => task.project_id === projectId && task.status !== 'Završen'
+      ).length,
+      contracts: contracts.filter((contract) => contract.project_id === projectId).length,
+      documents: documents.filter((document) => document.project_id === projectId).length,
+      notes: notes.filter((note) => note.project_id === projectId).length
+    };
+  }
+
   function dateDeltaDays(value: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
     const target = new Date(`${value}T00:00:00`);
@@ -1272,10 +1292,16 @@
       <div class="toolbar"><strong>{clients.length} klijenata</strong></div>
       <div class="list">
         {#each clients as client}
-          <div class="list-item">
+          <div class="list-item entity-overview-item">
             <div>
               <h3>{client.name}</h3>
               <p>{client.status} · {client.tax_id || 'bez poreznog ID-a'} · {client.email || 'bez e-maila'}</p>
+              <div class="entity-metrics">
+                <span><Icon name="contact" size={12} />{clientRelationStats(client.id).contacts} kontakata</span>
+                <span><Icon name="briefcase" size={12} />{clientRelationStats(client.id).projects} projekata</span>
+                <span><Icon name="contract" size={12} />{clientRelationStats(client.id).contracts} ugovora</span>
+                <span><Icon name="file" size={12} />{clientRelationStats(client.id).documents} dokumenata</span>
+              </div>
             </div>
             <div class="row-actions">
               <button class="button" onclick={() => editClient(client)}><Icon name="edit" size={15} />Uredi</button>
@@ -1442,10 +1468,16 @@
       <div class="toolbar"><strong>{projects.length} projekata</strong></div>
       <div class="list">
         {#each projects as project}
-          <div class="list-item">
+          <div class="list-item entity-overview-item">
             <div>
               <h3>{project.name}</h3>
               <p>{project.status} · {project.client_name || 'bez klijenta'} · {project.due_date || 'bez roka'} · {money(project.value_cents, project.currency)}</p>
+              <div class="entity-metrics">
+                <span><Icon name="check" size={12} />{projectRelationStats(project.id).openTasks} otvorenih zadataka</span>
+                <span><Icon name="contract" size={12} />{projectRelationStats(project.id).contracts} ugovora</span>
+                <span><Icon name="file" size={12} />{projectRelationStats(project.id).documents} dokumenata</span>
+                <span><Icon name="note" size={12} />{projectRelationStats(project.id).notes} bilješki</span>
+              </div>
             </div>
             <div class="row-actions">
               <span class="chip">{project.priority}</span>
