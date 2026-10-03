@@ -281,6 +281,16 @@ fn backup_database(state: State<'_, AppState>, destination: String) -> Result<()
 }
 
 #[tauri::command]
+fn restore_workspace_archive(state: State<'_, AppState>, source: String) -> Result<(), String> {
+    extras::restore_workspace_archive(&state, source)
+}
+
+#[tauri::command]
+fn restore_database(state: State<'_, AppState>, source: String) -> Result<(), String> {
+    extras::restore_database(&state, source)
+}
+
+#[tauri::command]
 fn global_search(state: State<'_, AppState>, query: String) -> Result<Vec<SearchHit>, String> {
     extras::global_search(&state, query)
 }
@@ -346,6 +356,8 @@ pub fn run() {
             export_workspace_xml,
             export_workspace_archive,
             backup_database,
+            restore_workspace_archive,
+            restore_database,
             global_search
         ])
         .run(tauri::generate_context!())
