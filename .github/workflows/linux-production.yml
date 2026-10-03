@@ -99,15 +99,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          PACKAGE_NAME="$(dpkg-deb -f artifacts/virelo.deb Package)"
+          test -n "$PACKAGE_NAME" || { echo "DEB package name is missing."; exit 1; }
+
           sudo apt-get install -y ./artifacts/virelo.deb
-          INSTALLED_BIN="$(dpkg -L virelo-desktop 2>/dev/null | awk '/\/usr\/bin\// { print; exit }')"
+          INSTALLED_BIN="$(dpkg -L "$PACKAGE_NAME" | awk '/\/usr\/bin\// { print; exit }')"
 
-          if [ -z "$INSTALLED_BIN" ] || [ ! -x "$INSTALLED_BIN" ]; then
-            PACKAGE_NAME="$(dpkg-deb -f artifacts/virelo.deb Package)"
-            INSTALLED_BIN="$(dpkg -L "$PACKAGE_NAME" | awk '/\/usr\/bin\// { print; exit }')"
-          fi
-
-          test -n "$INSTALLED_BIN" || { echo "Installed Virelo binary was not found."; exit 1; }
+          test -n "$INSTALLED_BIN" || {
+            echo "Installed files for package $PACKAGE_NAME:"
+            dpkg -L "$PACKAGE_NAME"
+            echo "Installed Virelo binary was not found."
+            exit 1
+          }
           test -x "$INSTALLED_BIN" || { echo "Installed Virelo binary is not executable: $INSTALLED_BIN"; exit 1; }
 
           LOG="$RUNNER_TEMP/virelo-deb-smoke.log"
