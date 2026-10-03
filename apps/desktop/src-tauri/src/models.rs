@@ -249,4 +249,7 @@ pub struct SearchHit {
 #[derive(Debug, Serialize)]
 pub struct AppInfo {
     pub version: String,
+    pub platform: String,
+    pub architecture: String,
+    pub data_directory: String,
 }
