@@ -1022,9 +1022,10 @@ fn rewrite_document_paths(conn: &mut Connection, documents_dir: &Path) -> Result
         let mut stmt = conn
             .prepare("SELECT id, file_path FROM documents ORDER BY id")
             .map_err(|error| error.to_string())?;
-        stmt.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))
-            .map_err(|error| error.to_string())?
-            .collect::<Result<Vec<_>, _>>()
+        let rows = stmt
+            .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())?
     };
 
@@ -1917,15 +1918,7 @@ pub fn backup_database(state: &AppState, destination: String) -> Result<(), Stri
         return Err("Backup mora biti spremljen na drugu lokaciju.".into());
     }
 
-    {
-        let conn = lock(state)?;
-        conn.execute_batch("PRAGMA wal_checkpoint(FULL);")
-            .map_err(|error| error.to_string())?;
-    }
-
-    fs::copy(&state.database_path, destination)
-        .map(|_| ())
-        .map_err(|error| error.to_string())
+    backup_live_database(state, destination)
 }
 
 pub fn global_search(state: &AppState, query: String) -> Result<Vec<SearchHit>, String> {
