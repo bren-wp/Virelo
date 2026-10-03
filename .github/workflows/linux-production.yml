@@ -128,7 +128,7 @@ jobs:
           echo "Linux DEB install and launch smoke test passed."
 
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Virelo-Linux-${{ steps.version.outputs.version }}
           path: |
