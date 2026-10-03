@@ -124,6 +124,15 @@ export interface Note {
   updated_at: string;
 }
 
+export interface DocumentInput {
+  title: string;
+  client_id: number | null;
+  project_id: number | null;
+  category: string;
+  tags: string;
+  description: string;
+}
+
 export interface DocumentRecord {
   id: number;
   title: string;
