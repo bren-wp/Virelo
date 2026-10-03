@@ -864,6 +864,84 @@ mod tests {
             .iter()
             .any(|name| name.starts_with("documents/")));
         assert!(archive.by_name("README.txt").is_ok());
+        drop(archive);
+
+        create_client(
+            &state,
+            Client {
+                id: 0,
+                name: "Privremeni klijent".into(),
+                tax_id: String::new(),
+                registration_id: String::new(),
+                email: String::new(),
+                phone: String::new(),
+                website: String::new(),
+                address: String::new(),
+                city: String::new(),
+                country: "Hrvatska".into(),
+                status: "Aktivan".into(),
+                notes: String::new(),
+                created_at: String::new(),
+            },
+        )
+        .expect("create temporary client before archive restore");
+        assert_eq!(list_clients(&state).expect("list mutated clients").len(), 2);
+
+        extras::restore_workspace_archive(&state, archive_path.to_string_lossy().into_owned())
+            .expect("restore full archive");
+        assert_eq!(
+            list_clients(&state).expect("list clients after archive restore").len(),
+            1
+        );
+        let restored_documents = list_documents(&state).expect("list restored documents");
+        assert_eq!(restored_documents.len(), 1);
+        assert!(Path::new(&restored_documents[0].file_path).is_file());
+        assert!(Path::new(&restored_documents[0].file_path).starts_with(&state.documents_dir));
+        assert_eq!(
+            fs::read_to_string(&restored_documents[0].file_path).expect("read restored document"),
+            "Virelo QA"
+        );
+
+        let database_backup_path = export_root.join("Virelo-restore-test.db");
+        extras::backup_database(
+            &state,
+            database_backup_path.to_string_lossy().into_owned(),
+        )
+        .expect("database backup for restore test");
+
+        create_client(
+            &state,
+            Client {
+                id: 0,
+                name: "Drugi privremeni klijent".into(),
+                tax_id: String::new(),
+                registration_id: String::new(),
+                email: String::new(),
+                phone: String::new(),
+                website: String::new(),
+                address: String::new(),
+                city: String::new(),
+                country: "Hrvatska".into(),
+                status: "Aktivan".into(),
+                notes: String::new(),
+                created_at: String::new(),
+            },
+        )
+        .expect("create temporary client before database restore");
+        assert_eq!(
+            list_clients(&state).expect("list database-mutated clients").len(),
+            2
+        );
+
+        extras::restore_database(
+            &state,
+            database_backup_path.to_string_lossy().into_owned(),
+        )
+        .expect("restore database backup");
+        assert_eq!(
+            list_clients(&state).expect("list clients after database restore").len(),
+            1
+        );
 
         let stats = dashboard_stats(&state).expect("dashboard stats");
         assert_eq!(stats.clients, 1);
