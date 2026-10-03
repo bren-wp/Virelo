@@ -890,7 +890,9 @@ mod tests {
         extras::restore_workspace_archive(&state, archive_path.to_string_lossy().into_owned())
             .expect("restore full archive");
         assert_eq!(
-            list_clients(&state).expect("list clients after archive restore").len(),
+            list_clients(&state)
+                .expect("list clients after archive restore")
+                .len(),
             1
         );
         let restored_documents = list_documents(&state).expect("list restored documents");
@@ -903,11 +905,8 @@ mod tests {
         );
 
         let database_backup_path = export_root.join("Virelo-restore-test.db");
-        extras::backup_database(
-            &state,
-            database_backup_path.to_string_lossy().into_owned(),
-        )
-        .expect("database backup for restore test");
+        extras::backup_database(&state, database_backup_path.to_string_lossy().into_owned())
+            .expect("database backup for restore test");
 
         create_client(
             &state,
@@ -929,17 +928,18 @@ mod tests {
         )
         .expect("create temporary client before database restore");
         assert_eq!(
-            list_clients(&state).expect("list database-mutated clients").len(),
+            list_clients(&state)
+                .expect("list database-mutated clients")
+                .len(),
             2
         );
 
-        extras::restore_database(
-            &state,
-            database_backup_path.to_string_lossy().into_owned(),
-        )
-        .expect("restore database backup");
+        extras::restore_database(&state, database_backup_path.to_string_lossy().into_owned())
+            .expect("restore database backup");
         assert_eq!(
-            list_clients(&state).expect("list clients after database restore").len(),
+            list_clients(&state)
+                .expect("list clients after database restore")
+                .len(),
             1
         );
 
