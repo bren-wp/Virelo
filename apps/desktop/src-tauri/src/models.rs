@@ -140,6 +140,19 @@ pub struct Note {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct DocumentInput {
+    pub title: String,
+    pub client_id: Option<i64>,
+    pub project_id: Option<i64>,
+    #[serde(default = "default_document_category")]
+    pub category: String,
+    #[serde(default)]
+    pub tags: String,
+    #[serde(default)]
+    pub description: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DocumentRecord {
     pub id: i64,
     pub title: String,
