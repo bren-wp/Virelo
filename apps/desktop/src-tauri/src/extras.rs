@@ -980,11 +980,12 @@ fn validate_restore_database(database_path: &Path, documents_dir: &Path) -> Resu
     let mut stmt = conn
         .prepare("SELECT id, file_path FROM documents ORDER BY id")
         .map_err(|error| error.to_string())?;
-    let document_paths = stmt
+    let rows = stmt
         .query_map([], |row| {
             Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
         })
-        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())?;
+    let document_paths = rows
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
 
@@ -1030,8 +1031,10 @@ fn rewrite_document_paths(conn: &mut Connection, documents_dir: &Path) -> Result
                 Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
             })
             .map_err(|error| error.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())?
+        let collected = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?;
+        collected
     };
 
     let tx = conn.transaction().map_err(|error| error.to_string())?;
