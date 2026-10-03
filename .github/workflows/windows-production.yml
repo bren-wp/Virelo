@@ -136,7 +136,7 @@ jobs:
           Write-Host "Setup install and installed-app launch smoke test passed: $($installed.FullName)"
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Virelo-Windows-${{ steps.version.outputs.version }}
           path: |
