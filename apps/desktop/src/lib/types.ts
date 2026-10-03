@@ -130,7 +130,12 @@ export interface DocumentRecord {
   file_name: string;
   file_path: string;
   client_id: number | null;
+  client_name: string | null;
   project_id: number | null;
+  project_name: string | null;
+  category: string;
+  tags: string;
+  description: string;
   created_at: string;
 }
 
