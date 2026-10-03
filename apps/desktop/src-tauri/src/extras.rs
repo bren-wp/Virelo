@@ -954,7 +954,13 @@ fn validate_restore_database(database_path: &Path, documents_dir: &Path) -> Resu
     // Starije Virelo kopije mogu nemati module dodane kasnijim migracijama.
     // Za valjan restore zahtijevamo samo jezgru koja postoji od prvog izdanja,
     // a trenutne migracije nakon povrata dodaju novije tablice i stupce.
-    for table in ["company_profile", "clients", "projects", "notes", "documents"] {
+    for table in [
+        "company_profile",
+        "clients",
+        "projects",
+        "notes",
+        "documents",
+    ] {
         let exists: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
@@ -1173,11 +1179,8 @@ fn extract_workspace_archive(
 
         let destination = staging_documents.join(&file_name);
         let mut output = fs::File::create(destination).map_err(|error| error.to_string())?;
-        let copied = std::io::copy(
-            &mut entry.take(MAX_ARCHIVE_DOCUMENT_BYTES + 1),
-            &mut output,
-        )
-        .map_err(|error| error.to_string())?;
+        let copied = std::io::copy(&mut entry.take(MAX_ARCHIVE_DOCUMENT_BYTES + 1), &mut output)
+            .map_err(|error| error.to_string())?;
         if copied > MAX_ARCHIVE_DOCUMENT_BYTES {
             return Err(format!("Dokument {file_name} prelazi dopuštenu veličinu."));
         }
