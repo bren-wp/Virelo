@@ -188,10 +188,30 @@
   let financeAmount = 0;
   let editingFinanceId: number | null = null;
 
+  const documentCategories = [
+    'Ugovor',
+    'Ponuda',
+    'Račun',
+    'Trošak',
+    'Projekt',
+    'Identifikacija',
+    'Porezno',
+    'Banka',
+    'Sastanak',
+    'Ostalo'
+  ];
+
   let documentClientId: number | null = null;
   let documentProjectId: number | null = null;
   let documentEditId: number | null = null;
   let documentTitle = '';
+  let documentCategory = 'Ostalo';
+  let documentTags = '';
+  let documentDescription = '';
+  let documentFilter = '';
+  let documentCategoryFilter = 'Sve';
+  let documentClientFilter: number | null = null;
+  let documentProjectFilter: number | null = null;
 
   const nav: Array<{ id: Section; label: string; group: 'workspace' | 'tools' }> = [
     { id: 'dashboard', label: 'Pregled', group: 'workspace' },
@@ -701,14 +721,60 @@
     if (ok) resetFinanceForm();
   }
 
+  function resetDocumentForm() {
+    documentEditId = null;
+    documentTitle = '';
+    documentClientId = null;
+    documentProjectId = null;
+    documentCategory = 'Ostalo';
+    documentTags = '';
+    documentDescription = '';
+  }
+
+  function filteredDocuments() {
+    const query = documentFilter.trim().toLocaleLowerCase('hr-HR');
+    return documents.filter((document) => {
+      if (documentCategoryFilter !== 'Sve' && document.category !== documentCategoryFilter) return false;
+      if (documentClientFilter !== null && document.client_id !== documentClientFilter) return false;
+      if (documentProjectFilter !== null && document.project_id !== documentProjectFilter) return false;
+      if (!query) return true;
+
+      return [
+        document.title,
+        document.file_name,
+        document.category,
+        document.tags,
+        document.description,
+        document.client_name || '',
+        document.project_name || ''
+      ].some((value) => value.toLocaleLowerCase('hr-HR').includes(query));
+    });
+  }
+
+  function clearDocumentFilters() {
+    documentFilter = '';
+    documentCategoryFilter = 'Sve';
+    documentClientFilter = null;
+    documentProjectFilter = null;
+  }
+
   async function addDocument() {
     const selected = await open({ multiple: false, directory: false });
     if (!selected || Array.isArray(selected)) return;
     const title = selected.split(/[\\/]/).pop() || 'Dokument';
-    await run(
-      () => api.importDocument(selected, title, documentClientId, documentProjectId),
+    const ok = await run(
+      () => api.importDocument(
+        selected,
+        title,
+        documentClientId,
+        documentProjectId,
+        documentCategory,
+        documentTags,
+        documentDescription
+      ),
       'Dokument je uvezen u Virelo.'
     );
+    if (ok) resetDocumentForm();
   }
 
   function editDocument(document: DocumentRecord) {
@@ -716,26 +782,26 @@
     documentTitle = document.title;
     documentClientId = document.client_id;
     documentProjectId = document.project_id;
+    documentCategory = document.category || 'Ostalo';
+    documentTags = document.tags;
+    documentDescription = document.description;
   }
 
   async function saveDocumentMetadata() {
     if (!documentEditId || !documentTitle.trim()) return;
     const ok = await run(
-      () =>
-        api.updateDocument(
-          documentEditId as number,
-          documentTitle,
-          documentClientId,
-          documentProjectId
-        ),
+      () => api.updateDocument(
+        documentEditId as number,
+        documentTitle,
+        documentClientId,
+        documentProjectId,
+        documentCategory,
+        documentTags,
+        documentDescription
+      ),
       'Podaci dokumenta su ažurirani.'
     );
-    if (ok) {
-      documentEditId = null;
-      documentTitle = '';
-      documentClientId = null;
-      documentProjectId = null;
-    }
+    if (ok) resetDocumentForm();
   }
 
   async function openDocument(document: DocumentRecord) {
@@ -908,6 +974,26 @@
     } catch {
       return `${(cents / 100).toFixed(2)} ${currency}`;
     }
+  }
+
+  function clientRelationStats(clientId: number) {
+    return {
+      contacts: contacts.filter((contact) => contact.client_id === clientId).length,
+      projects: projects.filter((project) => project.client_id === clientId).length,
+      contracts: contracts.filter((contract) => contract.client_id === clientId).length,
+      documents: documents.filter((document) => document.client_id === clientId).length
+    };
+  }
+
+  function projectRelationStats(projectId: number) {
+    return {
+      openTasks: tasks.filter(
+        (task) => task.project_id === projectId && task.status !== 'Završen'
+      ).length,
+      contracts: contracts.filter((contract) => contract.project_id === projectId).length,
+      documents: documents.filter((document) => document.project_id === projectId).length,
+      notes: notes.filter((note) => note.project_id === projectId).length
+    };
   }
 
   function dateDeltaDays(value: string) {
@@ -1206,10 +1292,16 @@
       <div class="toolbar"><strong>{clients.length} klijenata</strong></div>
       <div class="list">
         {#each clients as client}
-          <div class="list-item">
+          <div class="list-item entity-overview-item">
             <div>
               <h3>{client.name}</h3>
               <p>{client.status} · {client.tax_id || 'bez poreznog ID-a'} · {client.email || 'bez e-maila'}</p>
+              <div class="entity-metrics">
+                <span><Icon name="contact" size={12} />{clientRelationStats(client.id).contacts} kontakata</span>
+                <span><Icon name="briefcase" size={12} />{clientRelationStats(client.id).projects} projekata</span>
+                <span><Icon name="contract" size={12} />{clientRelationStats(client.id).contracts} ugovora</span>
+                <span><Icon name="file" size={12} />{clientRelationStats(client.id).documents} dokumenata</span>
+              </div>
             </div>
             <div class="row-actions">
               <button class="button" onclick={() => editClient(client)}><Icon name="edit" size={15} />Uredi</button>
@@ -1376,10 +1468,16 @@
       <div class="toolbar"><strong>{projects.length} projekata</strong></div>
       <div class="list">
         {#each projects as project}
-          <div class="list-item">
+          <div class="list-item entity-overview-item">
             <div>
               <h3>{project.name}</h3>
               <p>{project.status} · {project.client_name || 'bez klijenta'} · {project.due_date || 'bez roka'} · {money(project.value_cents, project.currency)}</p>
+              <div class="entity-metrics">
+                <span><Icon name="check" size={12} />{projectRelationStats(project.id).openTasks} otvorenih zadataka</span>
+                <span><Icon name="contract" size={12} />{projectRelationStats(project.id).contracts} ugovora</span>
+                <span><Icon name="file" size={12} />{projectRelationStats(project.id).documents} dokumenata</span>
+                <span><Icon name="note" size={12} />{projectRelationStats(project.id).notes} bilješki</span>
+              </div>
             </div>
             <div class="row-actions">
               <span class="chip">{project.priority}</span>
@@ -1454,28 +1552,83 @@
         {/each}
       </div>
     {:else if section === 'documents'}
-      <h1 class="page-title">Dokumenti</h1>
-      <p class="page-subtitle">Dokumenti povezani s klijentima i projektima.</p>
+      <div class="page-heading-row">
+        <div>
+          <h1 class="page-title">Dokumenti</h1>
+          <p class="page-subtitle">Lokalna poslovna arhiva s kategorijama, oznakama i vezama na klijente i projekte.</p>
+        </div>
+        <span class="heading-badge"><Icon name="archive" size={15} /> {documents.length} dokumenata</span>
+      </div>
 
       <div class="card form-grid compact-form">
+        <label>Kategorija
+          <select class="field" bind:value={documentCategory}>
+            {#each documentCategories as category}<option>{category}</option>{/each}
+          </select>
+        </label>
+        <label>Oznake<input class="field" bind:value={documentTags} placeholder="potpisano, 2026, računovodstvo" /></label>
         <label>Klijent<select class="field" bind:value={documentClientId}><option value={null}>Bez klijenta</option>{#each clients as client}<option value={client.id}>{client.name}</option>{/each}</select></label>
         <label>Projekt<select class="field" bind:value={documentProjectId}><option value={null}>Bez projekta</option>{#each projects as project}<option value={project.id}>{project.name}</option>{/each}</select></label>
         {#if documentEditId}
           <label class="wide">Naziv dokumenta<input class="field" bind:value={documentTitle} /></label>
-          <div class="wide form-actions">
-            <button class="button primary" onclick={saveDocumentMetadata}><Icon name="save" size={15} />Spremi podatke dokumenta</button>
-            <button class="button" onclick={() => { documentEditId = null; documentTitle = ''; documentClientId = null; documentProjectId = null; }}>Odustani</button>
-          </div>
-        {:else}
-          <div class="wide form-actions"><button class="button primary" disabled={busy} onclick={addDocument}><Icon name="upload" size={15} />Uvezi dokument</button></div>
         {/if}
+        <label class="wide">Opis<textarea class="field document-description" bind:value={documentDescription} placeholder="Kratko opiši sadržaj i svrhu dokumenta."></textarea></label>
+        <div class="wide form-actions">
+          {#if documentEditId}
+            <button class="button primary" onclick={saveDocumentMetadata}><Icon name="save" size={15} />Spremi podatke dokumenta</button>
+            <button class="button" onclick={resetDocumentForm}>Odustani</button>
+          {:else}
+            <button class="button primary" disabled={busy} onclick={addDocument}><Icon name="upload" size={15} />Odaberi i uvezi dokument</button>
+          {/if}
+        </div>
       </div>
 
-      <div class="toolbar"><strong>{documents.length} dokumenata</strong></div>
+      <div class="card document-filter-grid">
+        <label class="document-filter-search">Pretraži arhivu
+          <input class="field" bind:value={documentFilter} placeholder="naziv, datoteka, oznaka, opis, klijent…" />
+        </label>
+        <label>Kategorija
+          <select class="field" bind:value={documentCategoryFilter}>
+            <option>Sve</option>
+            {#each documentCategories as category}<option>{category}</option>{/each}
+          </select>
+        </label>
+        <label>Klijent
+          <select class="field" bind:value={documentClientFilter}>
+            <option value={null}>Svi klijenti</option>
+            {#each clients as client}<option value={client.id}>{client.name}</option>{/each}
+          </select>
+        </label>
+        <label>Projekt
+          <select class="field" bind:value={documentProjectFilter}>
+            <option value={null}>Svi projekti</option>
+            {#each projects as project}<option value={project.id}>{project.name}</option>{/each}
+          </select>
+        </label>
+      </div>
+
+      <div class="toolbar">
+        <strong>{filteredDocuments().length} od {documents.length} dokumenata</strong>
+        <button class="text-button" onclick={clearDocumentFilters}>Očisti filtre</button>
+      </div>
       <div class="list">
-        {#each documents as document}
-          <div class="list-item">
-            <div><h3>{document.title}</h3><p>{document.file_name} · {formatDate(document.created_at)}</p></div>
+        {#each filteredDocuments() as document}
+          <div class="list-item document-item">
+            <div class="document-kind"><Icon name="file" size={18} /></div>
+            <div>
+              <div class="document-title-row">
+                <h3>{document.title}</h3>
+                <span class="chip">{document.category || 'Ostalo'}</span>
+              </div>
+              <p>
+                {document.file_name}
+                {document.client_name ? ' · ' + document.client_name : ''}
+                {document.project_name ? ' · ' + document.project_name : ''}
+                · {formatDate(document.created_at)}
+              </p>
+              {#if document.tags}<p class="item-secondary">Oznake: {document.tags}</p>{/if}
+              {#if document.description}<p class="item-secondary document-summary">{document.description}</p>{/if}
+            </div>
             <div class="row-actions">
               <button class="button primary-soft" onclick={() => openDocument(document)}><Icon name="open" size={15} />Otvori</button>
               <button class="button" onclick={() => editDocument(document)}><Icon name="edit" size={15} />Uredi</button>
@@ -1483,7 +1636,7 @@
             </div>
           </div>
         {:else}
-          <div class="empty">Još nema dokumenata.</div>
+          <div class="empty">Nema dokumenata koji odgovaraju odabranim filtrima.</div>
         {/each}
       </div>
     {:else if section === 'activities'}

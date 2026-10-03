@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Virelo",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "identifier": "com.virelo.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -37,7 +37,7 @@
     "icon": ["icons/icon.png", "icons/icon.ico"],
     "category": "Business",
     "shortDescription": "Business workspace",
-    "longDescription": "Virelo organizes company data, contacts, clients, contracts, projects, tasks, notes, documents, activities, finance and portable archives in one desktop application.",
+    "longDescription": "Virelo organizes company data, contacts, clients, contracts, projects, tasks, notes, categorized document archives, activities, finance and portable archives in one desktop application.",
     "windows": {
       "nsis": {
         "installerIcon": "icons/icon.ico",

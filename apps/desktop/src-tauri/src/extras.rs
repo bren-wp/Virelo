@@ -14,9 +14,34 @@ use crate::{
     db::{self, AppState},
     models::{
         ActivityRecord, AppInfo, BankAccount, Client, ClientContact, CompanyProfile,
-        ContractRecord, DocumentRecord, FinanceRecord, Note, Project, SearchHit, TaskRecord,
+        ContractRecord, DocumentInput, DocumentRecord, FinanceRecord, Note, Project, SearchHit,
+        TaskRecord,
     },
 };
+
+fn ensure_column(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .map_err(|error| error.to_string())?;
+    let existing = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+
+    if !existing.iter().any(|name| name == column) {
+        conn.execute_batch(&format!(
+            "ALTER TABLE {table} ADD COLUMN {column} {definition}"
+        ))
+        .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
 
 pub fn migrate(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
@@ -115,7 +140,20 @@ pub fn migrate(conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_contracts_status_end ON contracts(status, end_date);
         "#,
     )
-    .map_err(|error| error.to_string())
+    .map_err(|error| error.to_string())?;
+
+    ensure_column(
+        conn,
+        "documents",
+        "category",
+        "TEXT NOT NULL DEFAULT 'Ostalo'",
+    )?;
+    ensure_column(conn, "documents", "tags", "TEXT NOT NULL DEFAULT ''")?;
+    ensure_column(conn, "documents", "description", "TEXT NOT NULL DEFAULT ''")?;
+    conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);")
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
 }
 
 fn lock(state: &AppState) -> Result<MutexGuard<'_, Connection>, String> {
@@ -510,20 +548,28 @@ pub fn update_note(state: &AppState, note: Note) -> Result<(), String> {
     Ok(())
 }
 
-pub fn update_document(
-    state: &AppState,
-    id: i64,
-    title: String,
-    client_id: Option<i64>,
-    project_id: Option<i64>,
-) -> Result<(), String> {
-    if id <= 0 || title.trim().is_empty() {
+pub fn update_document(state: &AppState, id: i64, document: DocumentInput) -> Result<(), String> {
+    if id <= 0 || document.title.trim().is_empty() {
         return Err("Dokument nije valjan.".into());
     }
     let conn = lock(state)?;
     conn.execute(
-        "UPDATE documents SET title=?2, client_id=?3, project_id=?4 WHERE id=?1",
-        params![id, title.trim(), client_id, project_id],
+        r#"UPDATE documents SET
+           title=?2, client_id=?3, project_id=?4, category=?5, tags=?6, description=?7
+           WHERE id=?1"#,
+        params![
+            id,
+            document.title.trim(),
+            document.client_id,
+            document.project_id,
+            if document.category.trim().is_empty() {
+                "Ostalo"
+            } else {
+                document.category.trim()
+            },
+            document.tags.trim(),
+            document.description.trim()
+        ],
     )
     .map_err(|error| error.to_string())?;
     Ok(())
@@ -1034,15 +1080,15 @@ pub fn export_workspace_csv(state: &AppState, destination: String) -> Result<(),
                 csv_cell("dokument"),
                 csv_cell(&document.id.to_string()),
                 csv_cell(&document.title),
-                csv_cell(""),
-                csv_cell(&document.file_name),
+                csv_cell(document.client_name.as_deref().unwrap_or("")),
+                csv_cell(&document.category),
                 csv_cell(&document.created_at),
                 csv_cell(""),
                 csv_cell(""),
-                csv_cell(""),
-                csv_cell(""),
-                csv_cell(""),
-                csv_cell(""),
+                csv_cell(&document.file_name),
+                csv_cell(document.project_name.as_deref().unwrap_or("")),
+                csv_cell(&document.tags),
+                csv_cell(&document.description),
             ]
             .join(","),
         );
@@ -1208,8 +1254,22 @@ pub fn export_workspace_markdown(state: &AppState, destination: String) -> Resul
     md.push_str("## Dokumenti\n\n");
     for document in db::list_documents(state)? {
         md.push_str(&format!(
-            "- **{}** · {} · {}\n",
-            document.title, document.file_name, document.created_at
+            "- **{}** · {} · {} · {}{}{}\n  {}\n",
+            document.title,
+            document.category,
+            document.file_name,
+            document.created_at,
+            document
+                .client_name
+                .as_deref()
+                .map(|name| format!(" · klijent: {name}"))
+                .unwrap_or_default(),
+            if document.tags.is_empty() {
+                String::new()
+            } else {
+                format!(" · oznake: {}", document.tags)
+            },
+            document.description
         ));
     }
 
@@ -1345,13 +1405,18 @@ pub fn export_workspace_html(state: &AppState, destination: String) -> Result<()
     }
 
     html.push_str(
-        "</table><h2>Dokumenti</h2><table><tr><th>Naziv</th><th>Datoteka</th><th>Datum</th></tr>",
+        "</table><h2>Dokumenti</h2><table><tr><th>Naziv</th><th>Kategorija</th><th>Klijent</th><th>Projekt</th><th>Oznake</th><th>Datoteka</th><th>Opis</th><th>Datum</th></tr>",
     );
     for document in documents {
         html.push_str(&format!(
-            "<tr><td>{}</td><td>{}</td><td>{}</td></tr>",
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
             html_escape(&document.title),
+            html_escape(&document.category),
+            html_escape(document.client_name.as_deref().unwrap_or("")),
+            html_escape(document.project_name.as_deref().unwrap_or("")),
+            html_escape(&document.tags),
             html_escape(&document.file_name),
+            html_escape(&document.description),
             html_escape(&document.created_at)
         ));
     }
@@ -1532,8 +1597,15 @@ pub fn global_search(state: &AppState, query: String) -> Result<Vec<SearchHit>, 
             SELECT 'note', id, title, tags
             FROM notes WHERE title LIKE ?1 OR body_markdown LIKE ?1 OR tags LIKE ?1
             UNION ALL
-            SELECT 'document', id, title, file_name
-            FROM documents WHERE title LIKE ?1 OR file_name LIKE ?1
+            SELECT 'document', d.id, d.title,
+                   d.category || ' ' || d.file_name || ' ' ||
+                   COALESCE(c.name, '') || ' ' || COALESCE(p.name, '')
+            FROM documents d
+            LEFT JOIN clients c ON c.id=d.client_id
+            LEFT JOIN projects p ON p.id=d.project_id
+            WHERE d.title LIKE ?1 OR d.file_name LIKE ?1 OR d.category LIKE ?1
+               OR d.tags LIKE ?1 OR d.description LIKE ?1
+               OR c.name LIKE ?1 OR p.name LIKE ?1
             UNION ALL
             SELECT 'task', id, title, status || ' ' || priority
             FROM tasks WHERE title LIKE ?1 OR notes LIKE ?1

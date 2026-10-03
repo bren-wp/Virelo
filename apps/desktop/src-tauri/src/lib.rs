@@ -7,7 +7,8 @@ use tauri::{Manager, State};
 use db::AppState;
 use models::{
     ActivityRecord, AppInfo, BankAccount, Client, ClientContact, CompanyProfile, ContractRecord,
-    DashboardStats, DocumentRecord, FinanceRecord, Note, Project, SearchHit, TaskRecord,
+    DashboardStats, DocumentInput, DocumentRecord, FinanceRecord, Note, Project, SearchHit,
+    TaskRecord,
 };
 
 #[tauri::command]
@@ -157,22 +158,18 @@ fn list_documents(state: State<'_, AppState>) -> Result<Vec<DocumentRecord>, Str
 fn import_document(
     state: State<'_, AppState>,
     source_path: String,
-    title: String,
-    client_id: Option<i64>,
-    project_id: Option<i64>,
+    document: DocumentInput,
 ) -> Result<i64, String> {
-    db::import_document(&state, source_path, title, client_id, project_id)
+    db::import_document(&state, source_path, document)
 }
 
 #[tauri::command]
 fn update_document(
     state: State<'_, AppState>,
     id: i64,
-    title: String,
-    client_id: Option<i64>,
-    project_id: Option<i64>,
+    document: DocumentInput,
 ) -> Result<(), String> {
-    extras::update_document(&state, id, title, client_id, project_id)
+    extras::update_document(&state, id, document)
 }
 
 #[tauri::command]

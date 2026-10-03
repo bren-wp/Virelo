@@ -8,7 +8,9 @@ use rusqlite::{params, Connection, OptionalExtension};
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
-use crate::models::{Client, CompanyProfile, DashboardStats, DocumentRecord, Note, Project};
+use crate::models::{
+    Client, CompanyProfile, DashboardStats, DocumentInput, DocumentRecord, Note, Project,
+};
 
 pub struct AppState {
     pub conn: Mutex<Connection>,
@@ -119,6 +121,9 @@ fn migrate(conn: &Connection) -> Result<(), String> {
             file_path TEXT NOT NULL UNIQUE,
             client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
             project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+            category TEXT NOT NULL DEFAULT 'Ostalo',
+            tags TEXT NOT NULL DEFAULT '',
+            description TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -410,8 +415,12 @@ pub fn list_documents(state: &AppState) -> Result<Vec<DocumentRecord>, String> {
     let conn = lock(state)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, title, file_name, file_path, client_id, project_id, created_at
-         FROM documents ORDER BY created_at DESC, id DESC",
+            "SELECT d.id, d.title, d.file_name, d.file_path, d.client_id, c.name,
+                    d.project_id, p.name, d.category, d.tags, d.description, d.created_at
+             FROM documents d
+             LEFT JOIN clients c ON c.id = d.client_id
+             LEFT JOIN projects p ON p.id = d.project_id
+             ORDER BY d.created_at DESC, d.id DESC",
         )
         .map_err(|error| error.to_string())?;
 
@@ -423,8 +432,13 @@ pub fn list_documents(state: &AppState) -> Result<Vec<DocumentRecord>, String> {
                 file_name: row.get(2)?,
                 file_path: row.get(3)?,
                 client_id: row.get(4)?,
-                project_id: row.get(5)?,
-                created_at: row.get(6)?,
+                client_name: row.get(5)?,
+                project_id: row.get(6)?,
+                project_name: row.get(7)?,
+                category: row.get(8)?,
+                tags: row.get(9)?,
+                description: row.get(10)?,
+                created_at: row.get(11)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -436,9 +450,7 @@ pub fn list_documents(state: &AppState) -> Result<Vec<DocumentRecord>, String> {
 pub fn import_document(
     state: &AppState,
     source_path: String,
-    title: String,
-    client_id: Option<i64>,
-    project_id: Option<i64>,
+    document: DocumentInput,
 ) -> Result<i64, String> {
     let source = Path::new(&source_path);
     if !source.is_file() {
@@ -457,18 +469,26 @@ pub fn import_document(
     let conn = lock(state)?;
     let destination_text = destination.to_string_lossy().to_string();
     let result = conn.execute(
-        "INSERT INTO documents (title, file_name, file_path, client_id, project_id)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+        "INSERT INTO documents
+         (title, file_name, file_path, client_id, project_id, category, tags, description)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
-            if title.trim().is_empty() {
+            if document.title.trim().is_empty() {
                 file_name
             } else {
-                title.trim()
+                document.title.trim()
             },
             file_name,
             destination_text,
-            client_id,
-            project_id
+            document.client_id,
+            document.project_id,
+            if document.category.trim().is_empty() {
+                "Ostalo"
+            } else {
+                document.category.trim()
+            },
+            document.tags.trim(),
+            document.description.trim()
         ],
     );
 
@@ -685,9 +705,14 @@ mod tests {
         let document_id = import_document(
             &state,
             source.to_string_lossy().into_owned(),
-            "QA dokument".into(),
-            Some(client_id),
-            Some(project_id),
+            DocumentInput {
+                title: "QA dokument".into(),
+                client_id: Some(client_id),
+                project_id: Some(project_id),
+                category: "Ugovor".into(),
+                tags: "qa, potpisano".into(),
+                description: "Dokument za provjeru arhivskog modula.".into(),
+            },
         )
         .expect("import document");
 
@@ -737,7 +762,18 @@ mod tests {
         );
         assert_eq!(list_projects(&state).expect("list projects").len(), 1);
         assert_eq!(list_notes(&state).expect("list notes").len(), 1);
-        assert_eq!(list_documents(&state).expect("list documents").len(), 1);
+        let listed_documents = list_documents(&state).expect("list documents");
+        assert_eq!(listed_documents.len(), 1);
+        assert_eq!(listed_documents[0].category, "Ugovor");
+        assert_eq!(
+            listed_documents[0].client_name.as_deref(),
+            Some("Test klijent")
+        );
+        assert_eq!(
+            listed_documents[0].project_name.as_deref(),
+            Some("Virelo QA projekt")
+        );
+        assert!(listed_documents[0].tags.contains("potpisano"));
         assert_eq!(extras::list_tasks(&state).expect("list tasks").len(), 1);
         assert_eq!(
             extras::list_activities(&state)
@@ -766,6 +802,10 @@ mod tests {
         let contract_search =
             extras::global_search(&state, "QA ugovor".into()).expect("contract search");
         assert!(contract_search.iter().any(|hit| hit.kind == "contract"));
+
+        let document_search =
+            extras::global_search(&state, "potpisano".into()).expect("document metadata search");
+        assert!(document_search.iter().any(|hit| hit.kind == "document"));
 
         let export_root = state
             .documents_dir
@@ -805,9 +845,9 @@ mod tests {
         assert!(fs::read_to_string(md_path)
             .expect("read markdown")
             .contains("Ana Test"));
-        assert!(fs::read_to_string(html_path)
-            .expect("read html")
-            .contains("Virelo QA ugovor"));
+        let html_export = fs::read_to_string(html_path).expect("read html");
+        assert!(html_export.contains("Virelo QA ugovor"));
+        assert!(html_export.contains("potpisano"));
         assert!(fs::read_to_string(yaml_path)
             .expect("read yaml")
             .contains("Glavni račun"));

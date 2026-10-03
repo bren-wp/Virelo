@@ -8,6 +8,7 @@ import type {
   CompanyProfile,
   ContractRecord,
   DashboardStats,
+  DocumentInput,
   DocumentRecord,
   FinanceRecord,
   Note,
@@ -62,10 +63,40 @@ export const api = {
     sourcePath: string,
     title: string,
     clientId: number | null,
-    projectId: number | null
-  ) => invoke<number>('import_document', { sourcePath, title, clientId, projectId }),
-  updateDocument: (id: number, title: string, clientId: number | null, projectId: number | null) =>
-    invoke<void>('update_document', { id, title, clientId, projectId }),
+    projectId: number | null,
+    category: string,
+    tags: string,
+    description: string
+  ) => {
+    const document: DocumentInput = {
+      title,
+      client_id: clientId,
+      project_id: projectId,
+      category,
+      tags,
+      description
+    };
+    return invoke<number>('import_document', { sourcePath, document });
+  },
+  updateDocument: (
+    id: number,
+    title: string,
+    clientId: number | null,
+    projectId: number | null,
+    category: string,
+    tags: string,
+    description: string
+  ) => {
+    const document: DocumentInput = {
+      title,
+      client_id: clientId,
+      project_id: projectId,
+      category,
+      tags,
+      description
+    };
+    return invoke<void>('update_document', { id, document });
+  },
   deleteDocument: (id: number) => invoke<void>('delete_document', { id }),
 
   tasks: () => invoke<TaskRecord[]>('list_tasks'),
