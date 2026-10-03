@@ -1026,7 +1026,9 @@ fn rewrite_document_paths(conn: &mut Connection, documents_dir: &Path) -> Result
             .prepare("SELECT id, file_path FROM documents ORDER BY id")
             .map_err(|error| error.to_string())?;
         let rows = stmt
-            .query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))
+            .query_map([], |row| {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            })
             .map_err(|error| error.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| error.to_string())?
