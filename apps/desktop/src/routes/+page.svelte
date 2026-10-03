@@ -1520,28 +1520,83 @@
         {/each}
       </div>
     {:else if section === 'documents'}
-      <h1 class="page-title">Dokumenti</h1>
-      <p class="page-subtitle">Dokumenti povezani s klijentima i projektima.</p>
+      <div class="page-heading-row">
+        <div>
+          <h1 class="page-title">Dokumenti</h1>
+          <p class="page-subtitle">Lokalna poslovna arhiva s kategorijama, oznakama i vezama na klijente i projekte.</p>
+        </div>
+        <span class="heading-badge"><Icon name="archive" size={15} /> {documents.length} dokumenata</span>
+      </div>
 
       <div class="card form-grid compact-form">
+        <label>Kategorija
+          <select class="field" bind:value={documentCategory}>
+            {#each documentCategories as category}<option>{category}</option>{/each}
+          </select>
+        </label>
+        <label>Oznake<input class="field" bind:value={documentTags} placeholder="potpisano, 2026, računovodstvo" /></label>
         <label>Klijent<select class="field" bind:value={documentClientId}><option value={null}>Bez klijenta</option>{#each clients as client}<option value={client.id}>{client.name}</option>{/each}</select></label>
         <label>Projekt<select class="field" bind:value={documentProjectId}><option value={null}>Bez projekta</option>{#each projects as project}<option value={project.id}>{project.name}</option>{/each}</select></label>
         {#if documentEditId}
           <label class="wide">Naziv dokumenta<input class="field" bind:value={documentTitle} /></label>
-          <div class="wide form-actions">
-            <button class="button primary" onclick={saveDocumentMetadata}><Icon name="save" size={15} />Spremi podatke dokumenta</button>
-            <button class="button" onclick={() => { documentEditId = null; documentTitle = ''; documentClientId = null; documentProjectId = null; }}>Odustani</button>
-          </div>
-        {:else}
-          <div class="wide form-actions"><button class="button primary" disabled={busy} onclick={addDocument}><Icon name="upload" size={15} />Uvezi dokument</button></div>
         {/if}
+        <label class="wide">Opis<textarea class="field document-description" bind:value={documentDescription} placeholder="Kratko opiši sadržaj i svrhu dokumenta."></textarea></label>
+        <div class="wide form-actions">
+          {#if documentEditId}
+            <button class="button primary" onclick={saveDocumentMetadata}><Icon name="save" size={15} />Spremi podatke dokumenta</button>
+            <button class="button" onclick={resetDocumentForm}>Odustani</button>
+          {:else}
+            <button class="button primary" disabled={busy} onclick={addDocument}><Icon name="upload" size={15} />Odaberi i uvezi dokument</button>
+          {/if}
+        </div>
       </div>
 
-      <div class="toolbar"><strong>{documents.length} dokumenata</strong></div>
+      <div class="card document-filter-grid">
+        <label class="document-filter-search">Pretraži arhivu
+          <input class="field" bind:value={documentFilter} placeholder="naziv, datoteka, oznaka, opis, klijent…" />
+        </label>
+        <label>Kategorija
+          <select class="field" bind:value={documentCategoryFilter}>
+            <option>Sve</option>
+            {#each documentCategories as category}<option>{category}</option>{/each}
+          </select>
+        </label>
+        <label>Klijent
+          <select class="field" bind:value={documentClientFilter}>
+            <option value={null}>Svi klijenti</option>
+            {#each clients as client}<option value={client.id}>{client.name}</option>{/each}
+          </select>
+        </label>
+        <label>Projekt
+          <select class="field" bind:value={documentProjectFilter}>
+            <option value={null}>Svi projekti</option>
+            {#each projects as project}<option value={project.id}>{project.name}</option>{/each}
+          </select>
+        </label>
+      </div>
+
+      <div class="toolbar">
+        <strong>{filteredDocuments().length} od {documents.length} dokumenata</strong>
+        <button class="text-button" onclick={clearDocumentFilters}>Očisti filtre</button>
+      </div>
       <div class="list">
-        {#each documents as document}
-          <div class="list-item">
-            <div><h3>{document.title}</h3><p>{document.file_name} · {formatDate(document.created_at)}</p></div>
+        {#each filteredDocuments() as document}
+          <div class="list-item document-item">
+            <div class="document-kind"><Icon name="file" size={18} /></div>
+            <div>
+              <div class="document-title-row">
+                <h3>{document.title}</h3>
+                <span class="chip">{document.category || 'Ostalo'}</span>
+              </div>
+              <p>
+                {document.file_name}
+                {document.client_name ? ' · ' + document.client_name : ''}
+                {document.project_name ? ' · ' + document.project_name : ''}
+                · {formatDate(document.created_at)}
+              </p>
+              {#if document.tags}<p class="item-secondary">Oznake: {document.tags}</p>{/if}
+              {#if document.description}<p class="item-secondary document-summary">{document.description}</p>{/if}
+            </div>
             <div class="row-actions">
               <button class="button primary-soft" onclick={() => openDocument(document)}><Icon name="open" size={15} />Otvori</button>
               <button class="button" onclick={() => editDocument(document)}><Icon name="edit" size={15} />Uredi</button>
@@ -1549,7 +1604,7 @@
             </div>
           </div>
         {:else}
-          <div class="empty">Još nema dokumenata.</div>
+          <div class="empty">Nema dokumenata koji odgovaraju odabranim filtrima.</div>
         {/each}
       </div>
     {:else if section === 'activities'}
