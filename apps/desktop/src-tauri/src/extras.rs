@@ -1037,10 +1037,8 @@ fn rewrite_document_paths(conn: &mut Connection, documents_dir: &Path) -> Result
                 Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
             })
             .map_err(|error| error.to_string())?;
-        let collected = rows
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())?;
-        collected
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?
     };
 
     let tx = conn.transaction().map_err(|error| error.to_string())?;
@@ -1132,7 +1130,7 @@ fn extract_workspace_archive(
     }
 
     {
-        let mut database = archive
+        let database = archive
             .by_name("virelo.sqlite3")
             .map_err(|_| "Arhiva nema virelo.sqlite3.".to_string())?;
         if database.size() == 0 || database.size() > MAX_ARCHIVE_DATABASE_BYTES {
@@ -1154,7 +1152,7 @@ fn extract_workspace_archive(
     let mut total_document_bytes = 0u64;
 
     for index in 0..archive.len() {
-        let mut entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        let entry = archive.by_index(index).map_err(|error| error.to_string())?;
         let name = entry.name().to_string();
         if entry.is_dir() || !name.starts_with("documents/") {
             continue;
