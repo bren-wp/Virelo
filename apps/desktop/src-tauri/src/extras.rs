@@ -18,6 +18,30 @@ use crate::{
     },
 };
 
+fn ensure_column(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .map_err(|error| error.to_string())?;
+    let existing = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+
+    if !existing.iter().any(|name| name == column) {
+        conn.execute_batch(&format!(
+            "ALTER TABLE {table} ADD COLUMN {column} {definition}"
+        ))
+        .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 pub fn migrate(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         r#"
@@ -115,7 +139,17 @@ pub fn migrate(conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_contracts_status_end ON contracts(status, end_date);
         "#,
     )
-    .map_err(|error| error.to_string())
+    .map_err(|error| error.to_string())?;
+
+    ensure_column(conn, "documents", "category", "TEXT NOT NULL DEFAULT 'Ostalo'")?;
+    ensure_column(conn, "documents", "tags", "TEXT NOT NULL DEFAULT ''")?;
+    ensure_column(conn, "documents", "description", "TEXT NOT NULL DEFAULT ''")?;
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);",
+    )
+    .map_err(|error| error.to_string())?;
+
+    Ok(())
 }
 
 fn lock(state: &AppState) -> Result<MutexGuard<'_, Connection>, String> {
@@ -516,14 +550,27 @@ pub fn update_document(
     title: String,
     client_id: Option<i64>,
     project_id: Option<i64>,
+    category: String,
+    tags: String,
+    description: String,
 ) -> Result<(), String> {
     if id <= 0 || title.trim().is_empty() {
         return Err("Dokument nije valjan.".into());
     }
     let conn = lock(state)?;
     conn.execute(
-        "UPDATE documents SET title=?2, client_id=?3, project_id=?4 WHERE id=?1",
-        params![id, title.trim(), client_id, project_id],
+        r#"UPDATE documents SET
+           title=?2, client_id=?3, project_id=?4, category=?5, tags=?6, description=?7
+           WHERE id=?1"#,
+        params![
+            id,
+            title.trim(),
+            client_id,
+            project_id,
+            if category.trim().is_empty() { "Ostalo" } else { category.trim() },
+            tags.trim(),
+            description.trim()
+        ],
     )
     .map_err(|error| error.to_string())?;
     Ok(())
