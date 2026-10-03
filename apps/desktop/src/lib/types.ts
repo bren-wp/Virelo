@@ -202,4 +202,7 @@ export interface SearchHit {
 
 export interface AppInfo {
   version: string;
+  platform: string;
+  architecture: string;
+  data_directory: string;
 }
