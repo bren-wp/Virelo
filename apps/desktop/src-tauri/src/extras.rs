@@ -548,11 +548,7 @@ pub fn update_note(state: &AppState, note: Note) -> Result<(), String> {
     Ok(())
 }
 
-pub fn update_document(
-    state: &AppState,
-    id: i64,
-    document: DocumentInput,
-) -> Result<(), String> {
+pub fn update_document(state: &AppState, id: i64, document: DocumentInput) -> Result<(), String> {
     if id <= 0 || document.title.trim().is_empty() {
         return Err("Dokument nije valjan.".into());
     }
