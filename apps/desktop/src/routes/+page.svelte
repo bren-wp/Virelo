@@ -175,18 +175,34 @@
   let projectForm = emptyProject();
   let projectValue = 0;
   let editingProjectId: number | null = null;
+  let projectFilter = '';
+  let projectStatusFilter = 'Sve';
+  let projectPriorityFilter = 'Sve';
+  let projectClientFilter: number | null = null;
+  let projectDueFilter = 'Sve';
 
   let noteForm = emptyNote();
   let editingNoteId: number | null = null;
 
   let taskForm = emptyTask();
   let editingTaskId: number | null = null;
+  let taskFilter = '';
+  let taskStatusFilter = 'Sve';
+  let taskPriorityFilter = 'Sve';
+  let taskClientFilter: number | null = null;
+  let taskProjectFilter: number | null = null;
+  let taskDueFilter = 'Sve';
 
   let activityForm = emptyActivity();
 
   let financeForm = emptyFinance();
   let financeAmount = 0;
   let editingFinanceId: number | null = null;
+  let financeFilter = '';
+  let financeKindFilter = 'Sve';
+  let financeStatusFilter = 'Sve';
+  let financeClientFilter: number | null = null;
+  let financeDueFilter = 'Sve';
 
   const documentCategories = [
     'Ugovor',
@@ -976,6 +992,91 @@
     }
   }
 
+  function matchesText(values: Array<string | null | undefined>, query: string) {
+    const normalized = query.trim().toLocaleLowerCase('hr-HR');
+    if (!normalized) return true;
+    return values.some((value) =>
+      (value || '').toLocaleLowerCase('hr-HR').includes(normalized)
+    );
+  }
+
+  function matchesDueFilter(value: string, filter: string) {
+    if (filter === 'Sve') return true;
+    const days = dateDeltaDays(value);
+    if (filter === 'Bez roka') return !value;
+    if (days === null) return false;
+    if (filter === 'Zakašnjelo') return days < 0;
+    if (filter === 'Danas') return days === 0;
+    if (filter === '7 dana') return days >= 0 && days <= 7;
+    if (filter === '30 dana') return days >= 0 && days <= 30;
+    return true;
+  }
+
+  function filteredProjects() {
+    return projects.filter((project) => {
+      if (projectStatusFilter !== 'Sve' && project.status !== projectStatusFilter) return false;
+      if (projectPriorityFilter !== 'Sve' && project.priority !== projectPriorityFilter) return false;
+      if (projectClientFilter !== null && project.client_id !== projectClientFilter) return false;
+      if (!matchesDueFilter(project.due_date, projectDueFilter)) return false;
+      return matchesText(
+        [project.name, project.client_name, project.status, project.priority, project.notes],
+        projectFilter
+      );
+    });
+  }
+
+  function filteredTasks() {
+    return tasks.filter((task) => {
+      if (taskStatusFilter !== 'Sve' && task.status !== taskStatusFilter) return false;
+      if (taskPriorityFilter !== 'Sve' && task.priority !== taskPriorityFilter) return false;
+      if (taskClientFilter !== null && task.client_id !== taskClientFilter) return false;
+      if (taskProjectFilter !== null && task.project_id !== taskProjectFilter) return false;
+      if (!matchesDueFilter(task.due_date, taskDueFilter)) return false;
+      return matchesText(
+        [task.title, task.client_name, task.project_name, task.status, task.priority, task.notes],
+        taskFilter
+      );
+    });
+  }
+
+  function filteredFinance() {
+    return finance.filter((record) => {
+      if (financeKindFilter !== 'Sve' && record.kind !== financeKindFilter) return false;
+      if (financeStatusFilter !== 'Sve' && record.status !== financeStatusFilter) return false;
+      if (financeClientFilter !== null && record.client_id !== financeClientFilter) return false;
+      if (!matchesDueFilter(record.due_date, financeDueFilter)) return false;
+      return matchesText(
+        [record.title, record.number, record.client_name, record.kind, record.status, record.notes],
+        financeFilter
+      );
+    });
+  }
+
+  function clearProjectFilters() {
+    projectFilter = '';
+    projectStatusFilter = 'Sve';
+    projectPriorityFilter = 'Sve';
+    projectClientFilter = null;
+    projectDueFilter = 'Sve';
+  }
+
+  function clearTaskFilters() {
+    taskFilter = '';
+    taskStatusFilter = 'Sve';
+    taskPriorityFilter = 'Sve';
+    taskClientFilter = null;
+    taskProjectFilter = null;
+    taskDueFilter = 'Sve';
+  }
+
+  function clearFinanceFilters() {
+    financeFilter = '';
+    financeKindFilter = 'Sve';
+    financeStatusFilter = 'Sve';
+    financeClientFilter = null;
+    financeDueFilter = 'Sve';
+  }
+
   function clientRelationStats(clientId: number) {
     return {
       contacts: contacts.filter((contact) => contact.client_id === clientId).length,
@@ -1465,9 +1566,29 @@
         </div>
       </div>
 
-      <div class="toolbar"><strong>{projects.length} projekata</strong></div>
+      <div class="card operational-filter-grid">
+        <label class="operational-search">Pretraži
+          <input class="field" bind:value={projectFilter} placeholder="projekt, klijent, bilješka…" />
+        </label>
+        <label>Status
+          <select class="field" bind:value={projectStatusFilter}><option>Sve</option><option>Aktivan</option><option>Na čekanju</option><option>Završen</option></select>
+        </label>
+        <label>Prioritet
+          <select class="field" bind:value={projectPriorityFilter}><option>Sve</option><option>Nizak</option><option>Normalan</option><option>Visok</option><option>Hitan</option></select>
+        </label>
+        <label>Klijent
+          <select class="field" bind:value={projectClientFilter}><option value={null}>Svi klijenti</option>{#each clients as client}<option value={client.id}>{client.name}</option>{/each}</select>
+        </label>
+        <label>Rok
+          <select class="field" bind:value={projectDueFilter}><option>Sve</option><option>Zakašnjelo</option><option>Danas</option><option>7 dana</option><option>30 dana</option><option>Bez roka</option></select>
+        </label>
+      </div>
+      <div class="toolbar">
+        <strong>{filteredProjects().length} od {projects.length} projekata</strong>
+        <button class="text-button" onclick={clearProjectFilters}>Očisti filtre</button>
+      </div>
       <div class="list">
-        {#each projects as project}
+        {#each filteredProjects() as project}
           <div class="list-item entity-overview-item">
             <div>
               <h3>{project.name}</h3>
@@ -1505,9 +1626,32 @@
           {#if editingTaskId}<button class="button" onclick={resetTaskForm}>Odustani</button>{/if}
         </div>
       </div>
-      <div class="toolbar"><strong>{tasks.length} zadataka</strong></div>
+      <div class="card operational-filter-grid task-filter-grid">
+        <label class="operational-search">Pretraži
+          <input class="field" bind:value={taskFilter} placeholder="zadatak, klijent, projekt, bilješka…" />
+        </label>
+        <label>Status
+          <select class="field" bind:value={taskStatusFilter}><option>Sve</option><option>Otvoren</option><option>U tijeku</option><option>Na čekanju</option><option>Završen</option></select>
+        </label>
+        <label>Prioritet
+          <select class="field" bind:value={taskPriorityFilter}><option>Sve</option><option>Nizak</option><option>Normalan</option><option>Visok</option><option>Hitan</option></select>
+        </label>
+        <label>Klijent
+          <select class="field" bind:value={taskClientFilter}><option value={null}>Svi klijenti</option>{#each clients as client}<option value={client.id}>{client.name}</option>{/each}</select>
+        </label>
+        <label>Projekt
+          <select class="field" bind:value={taskProjectFilter}><option value={null}>Svi projekti</option>{#each projects as project}<option value={project.id}>{project.name}</option>{/each}</select>
+        </label>
+        <label>Rok
+          <select class="field" bind:value={taskDueFilter}><option>Sve</option><option>Zakašnjelo</option><option>Danas</option><option>7 dana</option><option>30 dana</option><option>Bez roka</option></select>
+        </label>
+      </div>
+      <div class="toolbar">
+        <strong>{filteredTasks().length} od {tasks.length} zadataka</strong>
+        <button class="text-button" onclick={clearTaskFilters}>Očisti filtre</button>
+      </div>
       <div class="list">
-        {#each tasks as task}
+        {#each filteredTasks() as task}
           <div class="list-item">
             <div>
               <h3>{task.title}</h3>
@@ -1687,9 +1831,29 @@
           {#if editingFinanceId}<button class="button" onclick={resetFinanceForm}>Odustani</button>{/if}
         </div>
       </div>
-      <div class="toolbar"><strong>{finance.length} financijskih zapisa</strong></div>
+      <div class="card operational-filter-grid">
+        <label class="operational-search">Pretraži
+          <input class="field" bind:value={financeFilter} placeholder="naziv, broj, klijent, bilješka…" />
+        </label>
+        <label>Vrsta
+          <select class="field" bind:value={financeKindFilter}><option>Sve</option><option>Ponuda</option><option>Račun</option><option>Trošak</option><option>Ostalo</option></select>
+        </label>
+        <label>Status
+          <select class="field" bind:value={financeStatusFilter}><option>Sve</option><option>Nacrt</option><option>Poslano</option><option>Prihvaćeno</option><option>Plaćeno</option><option>Dospjelo</option><option>Otkazano</option></select>
+        </label>
+        <label>Klijent
+          <select class="field" bind:value={financeClientFilter}><option value={null}>Svi klijenti</option>{#each clients as client}<option value={client.id}>{client.name}</option>{/each}</select>
+        </label>
+        <label>Dospijeće
+          <select class="field" bind:value={financeDueFilter}><option>Sve</option><option>Zakašnjelo</option><option>Danas</option><option>7 dana</option><option>30 dana</option><option>Bez roka</option></select>
+        </label>
+      </div>
+      <div class="toolbar">
+        <strong>{filteredFinance().length} od {finance.length} financijskih zapisa</strong>
+        <button class="text-button" onclick={clearFinanceFilters}>Očisti filtre</button>
+      </div>
       <div class="list">
-        {#each finance as record}
+        {#each filteredFinance() as record}
           <div class="list-item">
             <div>
               <h3>{record.title}</h3>
