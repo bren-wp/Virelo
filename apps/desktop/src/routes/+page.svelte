@@ -188,10 +188,30 @@
   let financeAmount = 0;
   let editingFinanceId: number | null = null;
 
+  const documentCategories = [
+    'Ugovor',
+    'Ponuda',
+    'Račun',
+    'Trošak',
+    'Projekt',
+    'Identifikacija',
+    'Porezno',
+    'Banka',
+    'Sastanak',
+    'Ostalo'
+  ];
+
   let documentClientId: number | null = null;
   let documentProjectId: number | null = null;
   let documentEditId: number | null = null;
   let documentTitle = '';
+  let documentCategory = 'Ostalo';
+  let documentTags = '';
+  let documentDescription = '';
+  let documentFilter = '';
+  let documentCategoryFilter = 'Sve';
+  let documentClientFilter: number | null = null;
+  let documentProjectFilter: number | null = null;
 
   const nav: Array<{ id: Section; label: string; group: 'workspace' | 'tools' }> = [
     { id: 'dashboard', label: 'Pregled', group: 'workspace' },
@@ -701,14 +721,60 @@
     if (ok) resetFinanceForm();
   }
 
+  function resetDocumentForm() {
+    documentEditId = null;
+    documentTitle = '';
+    documentClientId = null;
+    documentProjectId = null;
+    documentCategory = 'Ostalo';
+    documentTags = '';
+    documentDescription = '';
+  }
+
+  function filteredDocuments() {
+    const query = documentFilter.trim().toLocaleLowerCase('hr-HR');
+    return documents.filter((document) => {
+      if (documentCategoryFilter !== 'Sve' && document.category !== documentCategoryFilter) return false;
+      if (documentClientFilter !== null && document.client_id !== documentClientFilter) return false;
+      if (documentProjectFilter !== null && document.project_id !== documentProjectFilter) return false;
+      if (!query) return true;
+
+      return [
+        document.title,
+        document.file_name,
+        document.category,
+        document.tags,
+        document.description,
+        document.client_name || '',
+        document.project_name || ''
+      ].some((value) => value.toLocaleLowerCase('hr-HR').includes(query));
+    });
+  }
+
+  function clearDocumentFilters() {
+    documentFilter = '';
+    documentCategoryFilter = 'Sve';
+    documentClientFilter = null;
+    documentProjectFilter = null;
+  }
+
   async function addDocument() {
     const selected = await open({ multiple: false, directory: false });
     if (!selected || Array.isArray(selected)) return;
     const title = selected.split(/[\\/]/).pop() || 'Dokument';
-    await run(
-      () => api.importDocument(selected, title, documentClientId, documentProjectId),
+    const ok = await run(
+      () => api.importDocument(
+        selected,
+        title,
+        documentClientId,
+        documentProjectId,
+        documentCategory,
+        documentTags,
+        documentDescription
+      ),
       'Dokument je uvezen u Virelo.'
     );
+    if (ok) resetDocumentForm();
   }
 
   function editDocument(document: DocumentRecord) {
@@ -716,26 +782,26 @@
     documentTitle = document.title;
     documentClientId = document.client_id;
     documentProjectId = document.project_id;
+    documentCategory = document.category || 'Ostalo';
+    documentTags = document.tags;
+    documentDescription = document.description;
   }
 
   async function saveDocumentMetadata() {
     if (!documentEditId || !documentTitle.trim()) return;
     const ok = await run(
-      () =>
-        api.updateDocument(
-          documentEditId as number,
-          documentTitle,
-          documentClientId,
-          documentProjectId
-        ),
+      () => api.updateDocument(
+        documentEditId as number,
+        documentTitle,
+        documentClientId,
+        documentProjectId,
+        documentCategory,
+        documentTags,
+        documentDescription
+      ),
       'Podaci dokumenta su ažurirani.'
     );
-    if (ok) {
-      documentEditId = null;
-      documentTitle = '';
-      documentClientId = null;
-      documentProjectId = null;
-    }
+    if (ok) resetDocumentForm();
   }
 
   async function openDocument(document: DocumentRecord) {
