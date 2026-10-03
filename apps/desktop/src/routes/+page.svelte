@@ -1566,9 +1566,29 @@
         </div>
       </div>
 
-      <div class="toolbar"><strong>{projects.length} projekata</strong></div>
+      <div class="card operational-filter-grid">
+        <label class="operational-search">Pretraži
+          <input class="field" bind:value={projectFilter} placeholder="projekt, klijent, bilješka…" />
+        </label>
+        <label>Status
+          <select class="field" bind:value={projectStatusFilter}><option>Sve</option><option>Aktivan</option><option>Na čekanju</option><option>Završen</option></select>
+        </label>
+        <label>Prioritet
+          <select class="field" bind:value={projectPriorityFilter}><option>Sve</option><option>Nizak</option><option>Normalan</option><option>Visok</option><option>Hitan</option></select>
+        </label>
+        <label>Klijent
+          <select class="field" bind:value={projectClientFilter}><option value={null}>Svi klijenti</option>{#each clients as client}<option value={client.id}>{client.name}</option>{/each}</select>
+        </label>
+        <label>Rok
+          <select class="field" bind:value={projectDueFilter}><option>Sve</option><option>Zakašnjelo</option><option>Danas</option><option>7 dana</option><option>30 dana</option><option>Bez roka</option></select>
+        </label>
+      </div>
+      <div class="toolbar">
+        <strong>{filteredProjects().length} od {projects.length} projekata</strong>
+        <button class="text-button" onclick={clearProjectFilters}>Očisti filtre</button>
+      </div>
       <div class="list">
-        {#each projects as project}
+        {#each filteredProjects() as project}
           <div class="list-item entity-overview-item">
             <div>
               <h3>{project.name}</h3>
@@ -1606,9 +1626,32 @@
           {#if editingTaskId}<button class="button" onclick={resetTaskForm}>Odustani</button>{/if}
         </div>
       </div>
-      <div class="toolbar"><strong>{tasks.length} zadataka</strong></div>
+      <div class="card operational-filter-grid task-filter-grid">
+        <label class="operational-search">Pretraži
+          <input class="field" bind:value={taskFilter} placeholder="zadatak, klijent, projekt, bilješka…" />
+        </label>
+        <label>Status
+          <select class="field" bind:value={taskStatusFilter}><option>Sve</option><option>Otvoren</option><option>U tijeku</option><option>Na čekanju</option><option>Završen</option></select>
+        </label>
+        <label>Prioritet
+          <select class="field" bind:value={taskPriorityFilter}><option>Sve</option><option>Nizak</option><option>Normalan</option><option>Visok</option><option>Hitan</option></select>
+        </label>
+        <label>Klijent
+          <select class="field" bind:value={taskClientFilter}><option value={null}>Svi klijenti</option>{#each clients as client}<option value={client.id}>{client.name}</option>{/each}</select>
+        </label>
+        <label>Projekt
+          <select class="field" bind:value={taskProjectFilter}><option value={null}>Svi projekti</option>{#each projects as project}<option value={project.id}>{project.name}</option>{/each}</select>
+        </label>
+        <label>Rok
+          <select class="field" bind:value={taskDueFilter}><option>Sve</option><option>Zakašnjelo</option><option>Danas</option><option>7 dana</option><option>30 dana</option><option>Bez roka</option></select>
+        </label>
+      </div>
+      <div class="toolbar">
+        <strong>{filteredTasks().length} od {tasks.length} zadataka</strong>
+        <button class="text-button" onclick={clearTaskFilters}>Očisti filtre</button>
+      </div>
       <div class="list">
-        {#each tasks as task}
+        {#each filteredTasks() as task}
           <div class="list-item">
             <div>
               <h3>{task.title}</h3>
@@ -1788,9 +1831,29 @@
           {#if editingFinanceId}<button class="button" onclick={resetFinanceForm}>Odustani</button>{/if}
         </div>
       </div>
-      <div class="toolbar"><strong>{finance.length} financijskih zapisa</strong></div>
+      <div class="card operational-filter-grid">
+        <label class="operational-search">Pretraži
+          <input class="field" bind:value={financeFilter} placeholder="naziv, broj, klijent, bilješka…" />
+        </label>
+        <label>Vrsta
+          <select class="field" bind:value={financeKindFilter}><option>Sve</option><option>Ponuda</option><option>Račun</option><option>Trošak</option><option>Ostalo</option></select>
+        </label>
+        <label>Status
+          <select class="field" bind:value={financeStatusFilter}><option>Sve</option><option>Nacrt</option><option>Poslano</option><option>Prihvaćeno</option><option>Plaćeno</option><option>Dospjelo</option><option>Otkazano</option></select>
+        </label>
+        <label>Klijent
+          <select class="field" bind:value={financeClientFilter}><option value={null}>Svi klijenti</option>{#each clients as client}<option value={client.id}>{client.name}</option>{/each}</select>
+        </label>
+        <label>Dospijeće
+          <select class="field" bind:value={financeDueFilter}><option>Sve</option><option>Zakašnjelo</option><option>Danas</option><option>7 dana</option><option>30 dana</option><option>Bez roka</option></select>
+        </label>
+      </div>
+      <div class="toolbar">
+        <strong>{filteredFinance().length} od {finance.length} financijskih zapisa</strong>
+        <button class="text-button" onclick={clearFinanceFilters}>Očisti filtre</button>
+      </div>
       <div class="list">
-        {#each finance as record}
+        {#each filteredFinance() as record}
           <div class="list-item">
             <div>
               <h3>{record.title}</h3>
