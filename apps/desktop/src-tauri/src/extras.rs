@@ -824,9 +824,30 @@ pub fn delete_finance_record(state: &AppState, id: i64) -> Result<(), String> {
     Ok(())
 }
 
-pub fn app_info(_state: &AppState) -> AppInfo {
+pub fn app_info(state: &AppState) -> AppInfo {
+    let platform = match std::env::consts::OS {
+        "windows" => "Windows",
+        "macos" => "macOS",
+        "linux" => "Linux",
+        other => other,
+    };
+    let architecture = match std::env::consts::ARCH {
+        "x86_64" => "x64",
+        "aarch64" => "arm64",
+        other => other,
+    };
+    let data_directory = state
+        .database_path
+        .parent()
+        .unwrap_or(&state.database_path)
+        .to_string_lossy()
+        .to_string();
+
     AppInfo {
         version: env!("CARGO_PKG_VERSION").to_string(),
+        platform: platform.to_string(),
+        architecture: architecture.to_string(),
+        data_directory,
     }
 }
 
