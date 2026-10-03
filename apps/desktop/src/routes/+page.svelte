@@ -828,6 +828,19 @@
     }
   }
 
+  async function openDataDirectory() {
+    if (!appInfo?.data_directory) {
+      showMessage('Mapa lokalnih Virelo podataka još nije dostupna.', true);
+      return;
+    }
+
+    try {
+      await openPath(appInfo.data_directory);
+    } catch (error) {
+      showMessage(friendlyError(error), true);
+    }
+  }
+
   async function exportJson() {
     const destination = await save({
       defaultPath: 'Virelo-podaci.json',
@@ -2000,7 +2013,18 @@
         <dl>
           <div><dt>Proizvod</dt><dd>Virelo</dd></div>
           <div><dt>Verzija</dt><dd>{appInfo?.version || '—'}</dd></div>
-          <div><dt>Podaci</dt><dd>Izvoz, puna ZIP arhiva i provjereni povrat podataka dostupni su iz ovog izbornika.</dd></div>
+          <div><dt>Platforma</dt><dd>{appInfo ? `${appInfo.platform} · ${appInfo.architecture}` : '—'}</dd></div>
+          <div class="data-path-row">
+            <dt>Lokalni podaci</dt>
+            <dd>
+              <span class="path-value">{appInfo?.data_directory || '—'}</span>
+              <button class="button" disabled={!appInfo?.data_directory} onclick={openDataDirectory}>
+                <Icon name="folder" size={15} />Otvori mapu
+              </button>
+            </dd>
+          </div>
+          <div><dt>Privatnost</dt><dd>Poslovni podaci i dokumenti ostaju lokalno na ovom uređaju dok ih sam ne izvezeš ili kopiraš.</dd></div>
+          <div><dt>Oporavak</dt><dd>Izvoz, puna ZIP arhiva i provjereni povrat podataka dostupni su iz ovog izbornika.</dd></div>
         </dl>
       </section>
     {/if}
