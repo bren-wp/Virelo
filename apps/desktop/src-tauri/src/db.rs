@@ -41,7 +41,7 @@ impl AppState {
     }
 }
 
-fn configure_database(conn: &Connection) -> Result<(), String> {
+pub(crate) fn configure_database(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         "PRAGMA foreign_keys = ON;
          PRAGMA journal_mode = WAL;
@@ -50,7 +50,7 @@ fn configure_database(conn: &Connection) -> Result<(), String> {
     .map_err(|error| error.to_string())
 }
 
-fn migrate(conn: &Connection) -> Result<(), String> {
+pub(crate) fn migrate(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         r#"
         CREATE TABLE IF NOT EXISTS company_profile (
