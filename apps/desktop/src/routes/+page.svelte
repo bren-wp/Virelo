@@ -175,18 +175,34 @@
   let projectForm = emptyProject();
   let projectValue = 0;
   let editingProjectId: number | null = null;
+  let projectFilter = '';
+  let projectStatusFilter = 'Sve';
+  let projectPriorityFilter = 'Sve';
+  let projectClientFilter: number | null = null;
+  let projectDueFilter = 'Sve';
 
   let noteForm = emptyNote();
   let editingNoteId: number | null = null;
 
   let taskForm = emptyTask();
   let editingTaskId: number | null = null;
+  let taskFilter = '';
+  let taskStatusFilter = 'Sve';
+  let taskPriorityFilter = 'Sve';
+  let taskClientFilter: number | null = null;
+  let taskProjectFilter: number | null = null;
+  let taskDueFilter = 'Sve';
 
   let activityForm = emptyActivity();
 
   let financeForm = emptyFinance();
   let financeAmount = 0;
   let editingFinanceId: number | null = null;
+  let financeFilter = '';
+  let financeKindFilter = 'Sve';
+  let financeStatusFilter = 'Sve';
+  let financeClientFilter: number | null = null;
+  let financeDueFilter = 'Sve';
 
   const documentCategories = [
     'Ugovor',
@@ -974,6 +990,91 @@
     } catch {
       return `${(cents / 100).toFixed(2)} ${currency}`;
     }
+  }
+
+  function matchesText(values: Array<string | null | undefined>, query: string) {
+    const normalized = query.trim().toLocaleLowerCase('hr-HR');
+    if (!normalized) return true;
+    return values.some((value) =>
+      (value || '').toLocaleLowerCase('hr-HR').includes(normalized)
+    );
+  }
+
+  function matchesDueFilter(value: string, filter: string) {
+    if (filter === 'Sve') return true;
+    const days = dateDeltaDays(value);
+    if (filter === 'Bez roka') return !value;
+    if (days === null) return false;
+    if (filter === 'Zakašnjelo') return days < 0;
+    if (filter === 'Danas') return days === 0;
+    if (filter === '7 dana') return days >= 0 && days <= 7;
+    if (filter === '30 dana') return days >= 0 && days <= 30;
+    return true;
+  }
+
+  function filteredProjects() {
+    return projects.filter((project) => {
+      if (projectStatusFilter !== 'Sve' && project.status !== projectStatusFilter) return false;
+      if (projectPriorityFilter !== 'Sve' && project.priority !== projectPriorityFilter) return false;
+      if (projectClientFilter !== null && project.client_id !== projectClientFilter) return false;
+      if (!matchesDueFilter(project.due_date, projectDueFilter)) return false;
+      return matchesText(
+        [project.name, project.client_name, project.status, project.priority, project.notes],
+        projectFilter
+      );
+    });
+  }
+
+  function filteredTasks() {
+    return tasks.filter((task) => {
+      if (taskStatusFilter !== 'Sve' && task.status !== taskStatusFilter) return false;
+      if (taskPriorityFilter !== 'Sve' && task.priority !== taskPriorityFilter) return false;
+      if (taskClientFilter !== null && task.client_id !== taskClientFilter) return false;
+      if (taskProjectFilter !== null && task.project_id !== taskProjectFilter) return false;
+      if (!matchesDueFilter(task.due_date, taskDueFilter)) return false;
+      return matchesText(
+        [task.title, task.client_name, task.project_name, task.status, task.priority, task.notes],
+        taskFilter
+      );
+    });
+  }
+
+  function filteredFinance() {
+    return finance.filter((record) => {
+      if (financeKindFilter !== 'Sve' && record.kind !== financeKindFilter) return false;
+      if (financeStatusFilter !== 'Sve' && record.status !== financeStatusFilter) return false;
+      if (financeClientFilter !== null && record.client_id !== financeClientFilter) return false;
+      if (!matchesDueFilter(record.due_date, financeDueFilter)) return false;
+      return matchesText(
+        [record.title, record.number, record.client_name, record.kind, record.status, record.notes],
+        financeFilter
+      );
+    });
+  }
+
+  function clearProjectFilters() {
+    projectFilter = '';
+    projectStatusFilter = 'Sve';
+    projectPriorityFilter = 'Sve';
+    projectClientFilter = null;
+    projectDueFilter = 'Sve';
+  }
+
+  function clearTaskFilters() {
+    taskFilter = '';
+    taskStatusFilter = 'Sve';
+    taskPriorityFilter = 'Sve';
+    taskClientFilter = null;
+    taskProjectFilter = null;
+    taskDueFilter = 'Sve';
+  }
+
+  function clearFinanceFilters() {
+    financeFilter = '';
+    financeKindFilter = 'Sve';
+    financeStatusFilter = 'Sve';
+    financeClientFilter = null;
+    financeDueFilter = 'Sve';
   }
 
   function clientRelationStats(clientId: number) {
