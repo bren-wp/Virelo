@@ -62,10 +62,36 @@ export const api = {
     sourcePath: string,
     title: string,
     clientId: number | null,
-    projectId: number | null
-  ) => invoke<number>('import_document', { sourcePath, title, clientId, projectId }),
-  updateDocument: (id: number, title: string, clientId: number | null, projectId: number | null) =>
-    invoke<void>('update_document', { id, title, clientId, projectId }),
+    projectId: number | null,
+    category: string,
+    tags: string,
+    description: string
+  ) => invoke<number>('import_document', {
+    sourcePath,
+    title,
+    clientId,
+    projectId,
+    category,
+    tags,
+    description
+  }),
+  updateDocument: (
+    id: number,
+    title: string,
+    clientId: number | null,
+    projectId: number | null,
+    category: string,
+    tags: string,
+    description: string
+  ) => invoke<void>('update_document', {
+    id,
+    title,
+    clientId,
+    projectId,
+    category,
+    tags,
+    description
+  }),
   deleteDocument: (id: number) => invoke<void>('delete_document', { id }),
 
   tasks: () => invoke<TaskRecord[]>('list_tasks'),
