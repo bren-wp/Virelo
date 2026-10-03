@@ -682,6 +682,24 @@ textarea.note-editor {
   font-size: 12px;
 }
 
+.data-path-row dd {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.path-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.data-path-row .button {
+  flex: 0 0 auto;
+}
+
 .sidebar-scrim {
   display: none;
 }
@@ -747,6 +765,15 @@ textarea.note-editor {
 }
 
 @media (max-width: 760px) {
+  .data-info dl div {
+    grid-template-columns: 1fr;
+  }
+
+  .data-path-row dd {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .dashboard-grid,
   .settings-grid,
   .form-grid {

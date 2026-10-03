@@ -21,17 +21,25 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+
+      - name: Verify version consistency
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(node scripts/verify-version.mjs)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Virelo version: $VERSION"
 
       - name: Install dependencies
         run: npm ci
@@ -98,25 +106,64 @@ jobs:
           Stop-Process -Id $process.Id -Force
           Write-Host "Portable launch smoke test passed."
 
+      - name: Setup install and launch smoke test
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path "$PWD/artifacts/Virelo-Setup.exe").Path
+          $installRoot = Join-Path $env:LOCALAPPDATA "Virelo"
+
+          if (Test-Path $installRoot) {
+            Remove-Item $installRoot -Recurse -Force
+          }
+
+          $installer = Start-Process -FilePath $setup -ArgumentList "/S" -Wait -PassThru
+          if ($installer.ExitCode -ne 0) {
+            throw "Virelo Setup silent install failed with code $($installer.ExitCode)."
+          }
+
+          $candidates = Get-ChildItem $installRoot -Recurse -File -Filter "*.exe" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notmatch '^(unins|uninstall)' } |
+            Sort-Object Length -Descending
+          $installed = $candidates |
+            Where-Object { $_.Name -in @("Virelo.exe", "virelo-desktop.exe") } |
+            Select-Object -First 1
+          if (-not $installed) {
+            $installed = $candidates | Select-Object -First 1
+          }
+          if (-not $installed) {
+            Get-ChildItem $installRoot -Recurse -Force -ErrorAction SilentlyContinue | Format-Table FullName, Length
+            throw "Virelo Setup completed but no installed application executable was found under $installRoot."
+          }
+
+          Write-Host "Installed application executable: $($installed.FullName)"
+          $process = Start-Process -FilePath $installed.FullName -PassThru
+          Start-Sleep -Seconds 8
+          if ($process.HasExited) {
+            throw "Installed Virelo exited during launch smoke test with code $($process.ExitCode)."
+          }
+          Stop-Process -Id $process.Id -Force
+          Write-Host "Setup install and installed-app launch smoke test passed: $($installed.FullName)"
+
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: Virelo-Windows-1.8.0
+          name: Virelo-Windows-${{ steps.version.outputs.version }}
           path: |
             artifacts/Virelo-Portable.exe
             artifacts/Virelo-Setup.exe
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish v1.8.0 GitHub Release
+      - name: Publish GitHub Release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "v1.8.0"
+          $version = "${{ steps.version.outputs.version }}"
+          $tag = "v$version"
           gh release view $tag *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --target "${{ github.sha }}" --title "Virelo v1.8.0" --notes "Virelo 1.8 dovršava sigurnosne kopije i povrat podataka: validirani ZIP restore, provjereni SQLite restore, rollback pri pogrešci, zaštita od ZIP-slip putanja i CSV formula injectiona. Windows Setup i Portable buildovi ostaju provjereni kroz PE, GUI subsystem i launch smoke test."
+            gh release create $tag --target "${{ github.sha }}" --title "Virelo v$version" --notes "Virelo $version dovršava produkcijsku isporuku za Windows, macOS i Linux. Windows pipeline provjerava PE i GUI subsystem, Portable launch te stvarnu tihu instalaciju i pokretanje instalirane aplikacije. macOS i Linux pipelineovi dodaju vlastite provjerene pakete na isti release."
           }
           gh release upload $tag "artifacts/Virelo-Portable.exe" "artifacts/Virelo-Setup.exe" --clobber
