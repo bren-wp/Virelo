@@ -146,8 +146,22 @@ pub struct DocumentRecord {
     pub file_name: String,
     pub file_path: String,
     pub client_id: Option<i64>,
+    #[serde(default)]
+    pub client_name: Option<String>,
     pub project_id: Option<i64>,
+    #[serde(default)]
+    pub project_name: Option<String>,
+    #[serde(default = "default_document_category")]
+    pub category: String,
+    #[serde(default)]
+    pub tags: String,
+    #[serde(default)]
+    pub description: String,
     pub created_at: String,
+}
+
+fn default_document_category() -> String {
+    "Ostalo".to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize)]
