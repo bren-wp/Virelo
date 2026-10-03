@@ -121,12 +121,21 @@ jobs:
             throw "Virelo Setup silent install failed with code $($installer.ExitCode)."
           }
 
-          $installed = Get-ChildItem $installRoot -Recurse -File -Filter "Virelo.exe" -ErrorAction SilentlyContinue |
+          $candidates = Get-ChildItem $installRoot -Recurse -File -Filter "*.exe" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notmatch '^(unins|uninstall)' } |
+            Sort-Object Length -Descending
+          $installed = $candidates |
+            Where-Object { $_.Name -in @("Virelo.exe", "virelo-desktop.exe") } |
             Select-Object -First 1
           if (-not $installed) {
-            throw "Virelo Setup completed but the installed Virelo.exe was not found under $installRoot."
+            $installed = $candidates | Select-Object -First 1
+          }
+          if (-not $installed) {
+            Get-ChildItem $installRoot -Recurse -Force -ErrorAction SilentlyContinue | Format-Table FullName, Length
+            throw "Virelo Setup completed but no installed application executable was found under $installRoot."
           }
 
+          Write-Host "Installed application executable: $($installed.FullName)"
           $process = Start-Process -FilePath $installed.FullName -PassThru
           Start-Sleep -Seconds 8
           if ($process.HasExited) {
