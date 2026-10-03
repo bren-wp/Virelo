@@ -8,7 +8,9 @@ use rusqlite::{params, Connection, OptionalExtension};
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
-use crate::models::{Client, CompanyProfile, DashboardStats, DocumentRecord, Note, Project};
+use crate::models::{
+    Client, CompanyProfile, DashboardStats, DocumentInput, DocumentRecord, Note, Project,
+};
 
 pub struct AppState {
     pub conn: Mutex<Connection>,
@@ -448,12 +450,7 @@ pub fn list_documents(state: &AppState) -> Result<Vec<DocumentRecord>, String> {
 pub fn import_document(
     state: &AppState,
     source_path: String,
-    title: String,
-    client_id: Option<i64>,
-    project_id: Option<i64>,
-    category: String,
-    tags: String,
-    description: String,
+    document: DocumentInput,
 ) -> Result<i64, String> {
     let source = Path::new(&source_path);
     if !source.is_file() {
@@ -476,22 +473,22 @@ pub fn import_document(
          (title, file_name, file_path, client_id, project_id, category, tags, description)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
-            if title.trim().is_empty() {
+            if document.title.trim().is_empty() {
                 file_name
             } else {
-                title.trim()
+                document.title.trim()
             },
             file_name,
             destination_text,
-            client_id,
-            project_id,
-            if category.trim().is_empty() {
+            document.client_id,
+            document.project_id,
+            if document.category.trim().is_empty() {
                 "Ostalo"
             } else {
-                category.trim()
+                document.category.trim()
             },
-            tags.trim(),
-            description.trim()
+            document.tags.trim(),
+            document.description.trim()
         ],
     );
 
@@ -708,12 +705,14 @@ mod tests {
         let document_id = import_document(
             &state,
             source.to_string_lossy().into_owned(),
-            "QA dokument".into(),
-            Some(client_id),
-            Some(project_id),
-            "Ugovor".into(),
-            "qa, potpisano".into(),
-            "Dokument za provjeru arhivskog modula.".into(),
+            DocumentInput {
+                title: "QA dokument".into(),
+                client_id: Some(client_id),
+                project_id: Some(project_id),
+                category: "Ugovor".into(),
+                tags: "qa, potpisano".into(),
+                description: "Dokument za provjeru arhivskog modula.".into(),
+            },
         )
         .expect("import document");
 
