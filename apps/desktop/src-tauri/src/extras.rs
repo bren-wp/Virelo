@@ -141,13 +141,16 @@ pub fn migrate(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|error| error.to_string())?;
 
-    ensure_column(conn, "documents", "category", "TEXT NOT NULL DEFAULT 'Ostalo'")?;
+    ensure_column(
+        conn,
+        "documents",
+        "category",
+        "TEXT NOT NULL DEFAULT 'Ostalo'",
+    )?;
     ensure_column(conn, "documents", "tags", "TEXT NOT NULL DEFAULT ''")?;
     ensure_column(conn, "documents", "description", "TEXT NOT NULL DEFAULT ''")?;
-    conn.execute_batch(
-        "CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);",
-    )
-    .map_err(|error| error.to_string())?;
+    conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);")
+        .map_err(|error| error.to_string())?;
 
     Ok(())
 }
@@ -567,7 +570,11 @@ pub fn update_document(
             title.trim(),
             client_id,
             project_id,
-            if category.trim().is_empty() { "Ostalo" } else { category.trim() },
+            if category.trim().is_empty() {
+                "Ostalo"
+            } else {
+                category.trim()
+            },
             tags.trim(),
             description.trim()
         ],
