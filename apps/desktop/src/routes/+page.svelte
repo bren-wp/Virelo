@@ -903,6 +903,56 @@
     await run(() => api.backupDatabase(destination), 'Sigurnosna kopija je spremljena.');
   }
 
+  async function restoreArchive() {
+    const selected = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: 'Virelo arhiva', extensions: ['zip'] }]
+    });
+    if (!selected || Array.isArray(selected)) return;
+
+    const approved = await confirm(
+      'Povrat pune arhive zamijenit će trenutačnu bazu i dokumente sadržajem odabrane Virelo ZIP arhive. Prije povrata automatski se izrađuje privremena sigurnosna kopija za rollback. Nastaviti?',
+      {
+        title: 'Povrat Virelo arhive',
+        kind: 'warning',
+        okLabel: 'Vrati arhivu',
+        cancelLabel: 'Odustani'
+      }
+    );
+    if (!approved) return;
+
+    await run(
+      () => api.restoreArchive(selected),
+      'Virelo arhiva je provjerena i uspješno vraćena.'
+    );
+  }
+
+  async function restoreDatabase() {
+    const selected = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: 'Virelo baza', extensions: ['db', 'sqlite3'] }]
+    });
+    if (!selected || Array.isArray(selected)) return;
+
+    const approved = await confirm(
+      'Povrat baze zamijenit će trenutačne poslovne podatke. Dokumenti moraju već postojati u lokalnoj Virelo arhivi; za potpuni prijenos između uređaja koristi povrat ZIP arhive. Nastaviti?',
+      {
+        title: 'Povrat sigurnosne kopije',
+        kind: 'warning',
+        okLabel: 'Vrati bazu',
+        cancelLabel: 'Odustani'
+      }
+    );
+    if (!approved) return;
+
+    await run(
+      () => api.restoreDatabase(selected),
+      'Sigurnosna kopija baze je provjerena i uspješno vraćena.'
+    );
+  }
+
   async function removeClient(client: Client) {
     if (!(await confirmRemoval(`Ukloniti klijenta “${client.name}”? Povezani projekti i zapisi neće se automatski izbrisati.`))) return;
     await run(() => api.deleteClient(client.id), 'Klijent je uklonjen.');
@@ -1892,14 +1942,20 @@
         <section class="card export-card featured-export">
           <div class="export-icon"><Icon name="archive" size={20} /></div>
           <h2>Potpuna Virelo arhiva</h2>
-          <p class="muted">Standardni ZIP s bazom, čitljivim JSON podacima i svim uvezenim dokumentima.</p>
-          <button class="button primary" disabled={busy} onclick={exportArchive}><Icon name="archive" size={15} />Spremi ZIP arhivu</button>
+          <p class="muted">Standardni ZIP s bazom, čitljivim JSON podacima i svim uvezenim dokumentima. Preporučeni format za potpuni prijenos i oporavak.</p>
+          <div class="form-actions">
+            <button class="button primary" disabled={busy} onclick={exportArchive}><Icon name="archive" size={15} />Spremi ZIP arhivu</button>
+            <button class="button" disabled={busy} onclick={restoreArchive}><Icon name="backup" size={15} />Vrati ZIP arhivu</button>
+          </div>
         </section>
         <section class="card export-card">
           <div class="export-icon"><Icon name="backup" size={20} /></div>
-          <h2>Sigurnosna kopija</h2>
-          <p class="muted">Cjelovita kopija baze za povrat podataka.</p>
-          <button class="button primary" disabled={busy} onclick={backupDatabase}><Icon name="backup" size={15} />Spremi kopiju</button>
+          <h2>Sigurnosna kopija baze</h2>
+          <p class="muted">Kopija SQLite baze. Povrat baze provjerava integritet i zadržava lokalnu mapu dokumenata.</p>
+          <div class="form-actions">
+            <button class="button primary" disabled={busy} onclick={backupDatabase}><Icon name="backup" size={15} />Spremi kopiju</button>
+            <button class="button" disabled={busy} onclick={restoreDatabase}><Icon name="backup" size={15} />Vrati bazu</button>
+          </div>
         </section>
         <section class="card export-card">
           <div class="export-icon"><Icon name="export" size={20} /></div>
@@ -1944,7 +2000,7 @@
         <dl>
           <div><dt>Proizvod</dt><dd>Virelo</dd></div>
           <div><dt>Verzija</dt><dd>{appInfo?.version || '—'}</dd></div>
-          <div><dt>Podaci</dt><dd>Sigurnosna kopija i izvoz dostupni su iz ovog izbornika.</dd></div>
+          <div><dt>Podaci</dt><dd>Izvoz, puna ZIP arhiva i provjereni povrat podataka dostupni su iz ovog izbornika.</dd></div>
         </dl>
       </section>
     {/if}
